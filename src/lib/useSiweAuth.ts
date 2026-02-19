@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { SiweMessage } from "siwe";
 import { useAccount, useChainId, useSignMessage } from "wagmi";
-import { getNonce, verifySiwe, type VerifyResponse } from "../../lib/api";
+import { getNonce, verifySiwe, type VerifyResponse } from "./api";
 
 export function useSiweAuth() {
   const { address, isConnected } = useAccount();
@@ -19,13 +19,16 @@ export function useSiweAuth() {
 
   const login = useCallback(async () => {
     if (!isConnected || !address) throw new Error("Wallet not connected");
+
     setLoading(true);
     try {
+      // 1) nonce
       const { nonce } = await getNonce(address);
 
+      // 2) SIWE message
       const domain = import.meta.env.VITE_APP_DOMAIN || window.location.host;
       const uri = import.meta.env.VITE_APP_URI || window.location.origin;
-      console.log("Preparing SIWE message with", { domain, address, uri, chainId, nonce });
+
       const msg = new SiweMessage({
         domain,
         address,
@@ -36,17 +39,21 @@ export function useSiweAuth() {
         nonce,
       });
 
-      console.log("SIWE message prepared:", msg.address);
-
       const message = msg.prepareMessage();
+
+      // 3) Sign
       const signature = await signMessageAsync({ message });
+
+      // 4) Verify
       const result = await verifySiwe(message, signature);
 
+      // 5) Store token
       setToken(result.accessToken);
       setUser(result.user);
-      console.log("SIWE login successful:", result);
+
       localStorage.setItem("accessToken", result.accessToken);
       localStorage.setItem("user", JSON.stringify(result.user));
+
       return result;
     } finally {
       setLoading(false);

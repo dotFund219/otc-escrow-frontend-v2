@@ -8,6 +8,7 @@ export type VerifyResponse = {
 export async function getNonce(address: string) {
   const url = new URL(`${API_BASE}/auth/siwe/nonce`);
   url.searchParams.set("address", address);
+  
   const res = await fetch(url.toString(), { credentials: "include" });
   if (!res.ok) throw new Error("Failed to get nonce");
   return res.json() as Promise<{ nonce: string; expiresAt: string }>;

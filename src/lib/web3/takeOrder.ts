@@ -42,7 +42,7 @@ export async function approveAndTakeOrder(args: {
 
   const need = BigInt(args.quoteAmount || "0");
 
-  // fee 계산
+  // calculate fee
   const feeBps = await publicClient.readContract({
     address: configContract,
     abi: ABI.config,
@@ -64,7 +64,7 @@ export async function approveAndTakeOrder(args: {
     throw new Error("Insufficient balance");
   }
 
-  // 2) allowance 체크
+  // 2) check allowance
   const allowance = await publicClient.readContract({
     address: token,
     abi: ERC20_ABI,
@@ -74,10 +74,10 @@ export async function approveAndTakeOrder(args: {
 
   let approveTxHash: Hex | undefined;
 
-  // 3) 필요하면 approve
+  // 3) approve if needed
   if (allowance < totalCost) {
-    // ✅ 보수적: 딱 필요한 만큼 approve
-    // (원하면 MaxUint256 approve로 바꿀 수 있음)
+    // ✅ conservative: approve exactly what's needed
+    // (can switch to MaxUint256 approval if desired)
     approveTxHash = await walletClient.writeContract({
       account,
       address: token,
@@ -87,7 +87,7 @@ export async function approveAndTakeOrder(args: {
       chain: chain,
     });
 
-    // approve 확정 기다림
+    // wait for approval confirmation
     await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
   }
 
@@ -105,8 +105,9 @@ export async function approveAndTakeOrder(args: {
     hash: takeTxHash,
   });
 
-  // takeOrder가 return(tradeId)을 리턴하지만, EVM tx receipt만으로는 직접 못 뽑는 경우가 많아서
-  // 보통은 이벤트에서 tradeId를 읽는다. (컨트랙트에 event가 있으면 그걸 파싱)
-  // 여기서는 일단 txHash만 반환.
+  // takeOrder returns a value (tradeId), but it's often impossible to extract
+  // it directly from the EVM tx receipt.
+  // Typically you'd read tradeId from an event (parse it if the contract emits one).
+  // For now we just return the txHash.
   return { takeTxHash, approveTxHash };
 }

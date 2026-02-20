@@ -74,12 +74,12 @@ export function OrderBook({ compact }: { compact?: boolean }) {
         return next;
       });
     } catch (e) {
-      // 메타 실패는 치명적 아님
+      // metadata fetch failure is not critical
       console.warn("token meta load failed", e);
     }
   }
 
-  // ✅ 첫 페이지 로드 (refresh)
+  // ✅ load first page (refresh)
   const loadFirstPage = async () => {
     setLoading(true);
     setErr(null);
@@ -99,7 +99,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     }
   };
 
-  // ✅ 다음 페이지 로드 (append)
+  // ✅ load next page (append)
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
 
@@ -134,7 +134,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     }
   };
 
-  // ✅ auto refresh: “첫 페이지”만 안전하게 갱신
+  // ✅ auto refresh: safely refresh only the first page
   useEffect(() => {
     let t: number | null = null;
 
@@ -156,13 +156,13 @@ export function OrderBook({ compact }: { compact?: boolean }) {
   useEffect(() => {
     if (countdown !== REFRESH_SEC) return;
 
-    // countdown이 1에서 5로 리셋되는 타이밍이므로,
-    // 여기서 refresh 실행시키면 정확히 5초 주기됨.
-    // 단, 첫 렌더의 초기 5도 여기 들어오므로 보호.
+    // Because countdown resets from 1 to 5,
+    // triggering the refresh here yields an exact 5‑second interval.
+    // However, the initial 5 on first render also hits here, so guard against that.
     if (refreshingRef.current) return;
 
-    // 최초 진입 보호: orders가 비어있고 loading이면 스킵
-    // (필요없으면 제거해도 됨)
+    // initial entry guard: skip if orders empty and loading
+    // (can remove if unnecessary)
     if (loading) return;
 
     refreshingRef.current = true;
@@ -571,7 +571,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
         tradeId={
           orders.find((o) => o.orderId === confirmOrderId)?.tradeId ?? null
         }
-        txid={orders.find((o) => o.orderId === confirmOrderId)?.txid ?? null}
+        txid={orders.find((o) => o.orderId === confirmOrderId)?.txId ?? null}
         confirming={
           confirmingId ===
           orders.find((o) => o.orderId === confirmOrderId)?.orderId

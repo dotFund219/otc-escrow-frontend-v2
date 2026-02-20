@@ -19,6 +19,7 @@ export interface OtcOrder {
   status: OrderStatus;
   buyer: string | null;
   tradeId: string | null;
+  txId: string | null;
   createdAt: string | null;
   createdBlock: string | null;
   updatedBlock: string | null;

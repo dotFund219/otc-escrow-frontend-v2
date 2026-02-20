@@ -1,6 +1,10 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
-import { fetchPublicOrderBook, type OtcOrder } from "../../lib/api/orders";
+import {
+  fetchPublicOrderBook,
+  type OrderStatus,
+  type OtcOrder,
+} from "../../lib/api/orders";
 import { formatPrice, formatUnits, getTokenMeta } from "../../lib/tokenMeta";
 import { IconRefreshButton } from "../../components/ui/button/IconRefreshButton";
 import { ABI, ADDR, ERC20_ABI } from "../../lib/contract";
@@ -9,6 +13,8 @@ import { useToast } from "../../components/ui/toast/ToastProvider";
 import { approveAndTakeOrder } from "../../lib/web3/takeOrder";
 import { SubmitTxIdDialog } from "../../components/ui/dialog/SubmitTxIdDialog";
 import { submitDeliveryTx } from "../../lib/web3/submitDeliveryTx";
+import { ConfirmReceiptDialog } from "../../components/ui/dialog/ConfirmReceiptDialog";
+import { confirmReceipt } from "../../lib/web3/confirmReceipt";
 
 function shortAddr(a?: string | null, left = 6, right = 4) {
   if (!a) return "-";
@@ -42,6 +48,10 @@ export function OrderBook({ compact }: { compact?: boolean }) {
 
   const [txidOpen, setTxidOpen] = useState(false);
   const [txidOrderId, setTxidOrderId] = useState<string | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmOrderId, setConfirmOrderId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   async function loadTokenMeta(list: OtcOrder[]) {
     try {
@@ -313,12 +323,17 @@ export function OrderBook({ compact }: { compact?: boolean }) {
 
             const pair = `${sellMeta.symbol}/${quoteMeta.symbol}`;
 
-            const statusColor =
-              o.status === "OPEN"
-                ? "bg-emerald-500/15 text-emerald-300 border-emerald-400/20"
-                : o.status === "TAKEN"
-                  ? "bg-yellow-500/15 text-yellow-300 border-yellow-400/20"
-                  : "bg-zinc-500/15 text-zinc-300 border-zinc-400/20";
+            const STATUS_STYLE: Record<OrderStatus, string> = {
+              OPEN: "bg-emerald-500/15 text-emerald-300 border-emerald-400/20",
+
+              TAKEN: "bg-yellow-500/15 text-yellow-300 border-yellow-400/20",
+
+              DELIVERED: "bg-blue-500/15 text-blue-300 border-blue-400/20",
+
+              FINISHED: "bg-purple-500/15 text-purple-300 border-purple-400/20",
+
+              CANCELLED: "bg-zinc-500/15 text-zinc-300 border-zinc-400/20",
+            };
 
             return (
               <div
@@ -346,7 +361,9 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                 </div>
 
                 <div>
-                  <span className={clsx("pill px-2 py-0.5", statusColor)}>
+                  <span
+                    className={clsx("pill px-2 py-0.5", STATUS_STYLE[o.status])}
+                  >
                     {o.status}
                   </span>
                 </div>
@@ -435,14 +452,25 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                     if (o.status === "DELIVERED") {
                       if (isBuyer) {
                         return (
-                          <button
-                            className="btn btn-primary py-1 px-3 text-xs"
-                            onClick={() => {
-                              console.log("confirm tx", o.orderId);
-                            }}
-                          >
-                            Confirm
-                          </button>
+                          <div>
+                            <button
+                              className="btn btn-primary py-1 px-3 text-xs"
+                              onClick={() => {
+                                setConfirmOrderId(o.orderId);
+                                setConfirmOpen(true);
+                              }}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              className="btn btn-danger py-1 px-3 ms-1 text-xs"
+                              onClick={() => {
+                                console.log("reject tx", o.orderId);
+                              }}
+                            >
+                              Reject
+                            </button>
+                          </div>
                         );
                       }
 
@@ -534,6 +562,82 @@ export function OrderBook({ compact }: { compact?: boolean }) {
             await loadFirstPage();
           } catch (e: any) {
             toast.error(e.message || "Submit failed", { title: "Error" });
+          }
+        }}
+      />
+      <ConfirmReceiptDialog
+        open={confirmOpen}
+        orderId={confirmOrderId}
+        tradeId={
+          orders.find((o) => o.orderId === confirmOrderId)?.tradeId ?? null
+        }
+        txid={orders.find((o) => o.orderId === confirmOrderId)?.txid ?? null}
+        confirming={
+          confirmingId ===
+          orders.find((o) => o.orderId === confirmOrderId)?.orderId
+        }
+        onClose={() => {
+          if (confirmingId) return;
+          setConfirmOpen(false);
+          setConfirmOrderId(null);
+        }}
+        onConfirm={async () => {
+          const confirmOrder = orders.find((o) => o.orderId === confirmOrderId);
+
+          if (!isConnected || !address) {
+            toast.error("Please connect your wallet first.", {
+              title: "Wallet not connected",
+            });
+            return;
+          }
+          if (!confirmOrder) {
+            toast.error("Order not found", { title: "Error" });
+            return;
+          }
+          if (!confirmOrder.tradeId) {
+            toast.error("tradeId is missing", { title: "Error" });
+            return;
+          }
+          if (
+            !confirmOrder.buyer ||
+            confirmOrder.buyer.toLowerCase() !== address.toLowerCase()
+          ) {
+            toast.error("Only buyer can confirm receipt.", {
+              title: "Not allowed",
+            });
+            return;
+          }
+          if (confirmOrder.status !== "DELIVERED") {
+            toast.error("You can confirm only after seller submitted TXID.", {
+              title: "Invalid status",
+            });
+            return;
+          }
+          // if (!confirmTxid || !String(confirmTxid).trim()) {
+          //   toast.error("TXID not available.", { title: "Cannot confirm" });
+          //   return;
+          // }
+
+          try {
+            setConfirmingId(confirmOrder.orderId);
+
+            await confirmReceipt({
+              chainId: confirmOrder.chainId,
+              tradeId: confirmOrder.tradeId,
+            });
+
+            toast.success("Receipt confirmed. Trade finished.", {
+              title: "Success",
+            });
+            setConfirmOpen(false);
+            setConfirmOrderId(null);
+            await loadFirstPage();
+          } catch (e: any) {
+            toast.error(`Failed to confirm: ${e?.message ?? "Unknown error"}`, {
+              title: "Error",
+            });
+          } finally {
+            setConfirmingId(null);
           }
         }}
       />

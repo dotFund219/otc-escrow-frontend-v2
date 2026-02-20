@@ -194,7 +194,7 @@ export function CreateOrderPanel() {
 
       <div className="mt-4 space-y-3">
         <div>
-          <div className="text-xs muted mb-1">Sell Token</div>
+          {/* <div className="text-xs muted mb-1">Sell Token</div>
           <select
             className="select"
             value={sellKey}
@@ -205,16 +205,17 @@ export function CreateOrderPanel() {
                 {t.label}
               </option>
             ))}
-          </select>
+          </select> */}
 
           <AssetSelect
+            comment="Sell Token"
             value={sellKey}
             onChange={(val) => setSellKey(val as TokenKey)}
           />
         </div>
 
         <div>
-          <div className="text-xs muted mb-1">Quote Token</div>
+          {/* <div className="text-xs muted mb-1">Quote Token</div>
           <select
             className="select"
             value={quoteKey}
@@ -225,7 +226,13 @@ export function CreateOrderPanel() {
                 {t.label}
               </option>
             ))}
-          </select>
+          </select> */}
+
+          <AssetSelect
+            comment="Quote Token"
+            value={quoteKey}
+            onChange={(val) => setQuoteKey(val as TokenKey)}
+          />
 
           {pairInvalid ? (
             <div className="text-xs mt-1 text-red-200">

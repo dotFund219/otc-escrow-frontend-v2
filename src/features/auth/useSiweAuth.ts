@@ -27,18 +27,13 @@ export function useSiweAuth() {
 
       const domain = import.meta.env.VITE_APP_DOMAIN || window.location.host;
       const uri = import.meta.env.VITE_APP_URI || window.location.origin;
-      console.log("Preparing SIWE message with", {
-        domain,
-        address,
-        uri,
-        chainId,
-        nonce,
-      });
+
+      console.log(window.location.host);
       const msg = new SiweMessage({
-        domain,
+        domain: window.location.host,
         address,
         statement: "Sign in to OTC Desk",
-        uri,
+        uri: window.location.origin,
         version: "1",
         chainId,
         nonce,

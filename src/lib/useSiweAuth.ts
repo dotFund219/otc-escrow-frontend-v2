@@ -1,14 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { SiweMessage } from "siwe";
 import { useAccount, useChainId, useSignMessage } from "wagmi";
-import { getNonce, verifySiwe, type VerifyResponse } from "./api";
+import { getNonce, verifySiwe, type VerifyResponse } from "./api/auth";
 
 export function useSiweAuth() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { signMessageAsync } = useSignMessage();
 
-  const [token, setToken] = useState<string | null>(localStorage.getItem("accessToken"));
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("accessToken"),
+  );
   const [user, setUser] = useState<VerifyResponse["user"] | null>(() => {
     const raw = localStorage.getItem("user");
     return raw ? JSON.parse(raw) : null;

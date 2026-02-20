@@ -1,3 +1,4 @@
+import PriceChart from "../components/ui/chart/PriceChart";
 import { MarketsPanel } from "../features/markets/MarketsPanel";
 import { CreateOrderPanel } from "../features/orders/CreateOrderPanel";
 import { OrderBook } from "../features/orders/OrderBook";
@@ -12,7 +13,10 @@ export function TradePage() {
         <div className="panel p-6">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-sm muted">WETH/USDT <span className="ml-2 text-xs muted">Wrapped Ethereum</span></div>
+              <div className="text-sm muted">
+                WETH/USDT{" "}
+                <span className="ml-2 text-xs muted">Wrapped Ethereum</span>
+              </div>
               <div className="text-3xl font-semibold mt-1">$3,000.00</div>
               <div className="text-sm text-emerald-300 mt-1">+0.00% 24h</div>
             </div>
@@ -27,7 +31,9 @@ export function TradePage() {
           <div className="flex items-center gap-3 text-sm muted">
             <button className="pill">1H</button>
             <button className="pill">4H</button>
-            <button className="pill border-emerald-400/30 bg-emerald-500/10 text-emerald-200">1D</button>
+            <button className="pill border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+              1D
+            </button>
             <button className="pill">1W</button>
             <button className="pill">1M</button>
             <div className="ml-auto flex items-center gap-2">
@@ -37,10 +43,11 @@ export function TradePage() {
           </div>
 
           <div className="mt-5 panel-inset h-[360px] flex items-center justify-center">
-            <div className="text-center">
+            <PriceChart />
+            {/* <div className="text-center">
               <div className="text-zinc-400">Price Chart</div>
               <div className="text-xs muted mt-1">WETH/USDT · 1D</div>
-            </div>
+            </div> */}
           </div>
         </div>
 

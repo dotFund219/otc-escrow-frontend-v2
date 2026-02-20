@@ -4,7 +4,7 @@ import OTCEscrowAbi from "../../abi/OTCEscrow.json";
 import OTCAdminAbi from "../../abi/OTCAdmin.json";
 import { bscTestnet, mainnet, polygon, sepolia } from "wagmi/chains";
 
-// 너 프로젝트에서 쓰는 체인들만 남겨도 됨
+// you can keep only the chains your project uses
 export const CHAIN_BY_ID: Record<number, any> = {
   1: mainnet,
   137: polygon,
@@ -12,11 +12,11 @@ export const CHAIN_BY_ID: Record<number, any> = {
   97: bscTestnet,
 };
 
-// RPC는 환경변수로 관리 권장
+// RPC URLs are recommended to be managed via environment variables
 export function rpcUrl(chainId: number) {
-  // 예: VITE_RPC_1 / NEXT_PUBLIC_RPC_1 등
+  // e.g. VITE_RPC_1 / NEXT_PUBLIC_RPC_1, etc.
   const v = (import.meta as any)?.env?.[`VITE_RPC_URL_${chainId}`];
-  return v ?? ""; // 없으면 public RPC로는 제한될 수 있음
+  return v ?? ""; // if missing, public RPC may be rate-limited
 }
 
 export const ADDR = {

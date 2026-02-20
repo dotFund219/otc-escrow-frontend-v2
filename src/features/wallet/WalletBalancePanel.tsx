@@ -19,7 +19,7 @@ const ERC20_ABI = [
   },
 ] as const;
 
-// ⚠️ 메인넷 컨트랙트 주소들 (다른 체인이면 여기 바꿔야 함)
+// ⚠️ mainnet contract addresses (change here for other chains)
 const TOKENS = [
   {
     symbol: "USDT",
@@ -136,7 +136,7 @@ export function WalletBalancePanel() {
       </div>
 
       {!isConnected ? (
-        <div className="mt-4 text-sm muted">Metamask 지갑을 연결해 주세요.</div>
+        <div className="mt-4 text-sm muted">Please connect your Metamask wallet.</div>
       ) : (
         <>
           <div className="mt-4 space-y-3">

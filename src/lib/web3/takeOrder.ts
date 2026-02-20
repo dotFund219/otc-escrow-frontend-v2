@@ -91,7 +91,7 @@ export async function approveAndTakeOrder(args: {
     await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
   }
 
-  // 4) takeOrder 호출
+  // 4) call takeOrder
   const takeTxHash = await walletClient.writeContract({
     account,
     address: orderContract,

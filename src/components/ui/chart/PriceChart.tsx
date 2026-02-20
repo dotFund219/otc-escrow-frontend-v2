@@ -8,8 +8,8 @@ import {
 } from "lightweight-charts";
 
 type Props = {
-  symbol?: string; // 예: "BTCUSDT"
-  interval?: string; // 예: "1m", "5m", "1h", "1d"
+  symbol?: string; // e.g : "BTCUSDT"
+  interval?: string; // e.g : "1m", "5m", "1h", "1d"
 };
 
 export default function PriceChart({

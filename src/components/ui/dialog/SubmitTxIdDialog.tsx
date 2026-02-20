@@ -5,7 +5,7 @@ function isValidTxid(v: string) {
   const s = v.trim();
   // EVM tx hash (0x + 64 hex)
   if (/^0x[a-fA-F0-9]{64}$/.test(s)) return true;
-  // Non-EVM txid도 고려하면 길이만 체크 (원하면 더 엄격하게)
+  // also accept non-EVM txids by checking length only (make stricter if desired)
   if (s.length >= 16 && s.length <= 128) return true;
   return false;
 }

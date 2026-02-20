@@ -32,7 +32,7 @@ export async function getTokenMeta(
   try {
     const addr = token as Address;
 
-    // multicall로 한번에 가져오기
+    // fetch both at once with multicall
     const [symbol, decimals] = await client.multicall({
       contracts: [
         { address: addr, abi: erc20Abi, functionName: "symbol" },
@@ -103,7 +103,7 @@ export function formatPrice(
   const num = quote * 10n ** BigInt(sellDec) * scale;
   const den = sell * 10n ** BigInt(quoteDec);
 
-  const pScaled = num / den; // dp가 적용된 정수
+  const pScaled = num / den; // integer scaled by dp
   const int = pScaled / scale;
   const frac = (pScaled % scale)
     .toString()

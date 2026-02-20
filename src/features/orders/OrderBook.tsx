@@ -115,7 +115,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
 
       const list = data.orders ?? [];
       setOrders((prev) => {
-        // 중복 제거 (orderId 기준)
+        // dedupe (based on orderId)
         const seen = new Set(prev.map((x) => `${x.chainId}:${x.orderId}`));
         const appended = list.filter(
           (x) => !seen.has(`${x.chainId}:${x.orderId}`),
@@ -169,7 +169,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     Promise.resolve()
       .then(async () => {
         if (hasLoadedMore) {
-          // 기존 로직: 상단 페이지만 갱신 + 아래는 유지
+          // existing logic: refresh only the top page, keep the rest
           const data = await fetchPublicOrderBook({ chainId, limit });
           const first = data.orders ?? [];
           setNextCursor(data.nextCursor ?? null);
@@ -253,7 +253,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
 
       <div className={clsx("mt-4", compact && "mt-0")}>
         <div className="overflow-hidden rounded-xl border border-white/10">
-          {/* ✅ STATUS 컬럼 포함: grid-cols-7 */}
+          {/* ✅ include STATUS column: grid-cols-7 */}
           <div className="grid grid-cols-7 bg-white/5 text-xs muted px-4 py-2">
             <div>TYPE</div>
             <div>PAIR</div>

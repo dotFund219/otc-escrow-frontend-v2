@@ -7,8 +7,8 @@ import {
 } from "../../lib/api/orders";
 import { formatPrice, formatUnits, getTokenMeta } from "../../lib/tokenMeta";
 import { IconRefreshButton } from "../../components/ui/button/IconRefreshButton";
-import { ABI, ADDR, ERC20_ABI } from "../../lib/contract";
-import { useAccount, useReadContract } from "wagmi";
+import { ADDR } from "../../lib/contract";
+import { useAccount } from "wagmi";
 import { useToast } from "../../components/ui/toast/ToastProvider";
 import { approveAndTakeOrder } from "../../lib/web3/takeOrder";
 import { SubmitTxIdDialog } from "../../components/ui/dialog/SubmitTxIdDialog";
@@ -212,15 +212,13 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       quoteAmount:
         orders.find((o) => o.orderId === orderId)?.quoteAmount ?? "0",
     })
-      .then((result) => {
+      .then(() => {
         toast.success("Order taken successfully", { title: "Success" });
       })
       .catch((e) => {
         toast.error("Failed to take order: " + e.message, { title: "Error" });
       });
   };
-
-  const onSubmitTxId = (orderId: string) => {};
 
   return (
     <div

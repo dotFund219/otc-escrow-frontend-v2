@@ -105,6 +105,8 @@ export async function approveAndTakeOrder(args: {
     hash: takeTxHash,
   });
 
+  console.log("takeOrder receipt:", receipt);
+
   // takeOrder returns a value (tradeId), but it's often impossible to extract
   // it directly from the EVM tx receipt.
   // Typically you'd read tradeId from an event (parse it if the contract emits one).

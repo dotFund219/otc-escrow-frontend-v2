@@ -16,8 +16,6 @@ const TOKEN_OPTIONS: Array<{ key: TokenKey; label: string }> = [
   { key: "USDC", label: "USDC" },
 ];
 
-const assets = ["Wrapped Bitcoin", "Wrapped Ethereum", "USDT", "USDC"];
-
 export default function AssetSelect({ comment, value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

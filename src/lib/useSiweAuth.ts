@@ -28,8 +28,8 @@ export function useSiweAuth() {
       const { nonce } = await getNonce(address);
 
       // 2) SIWE message
-      const domain = import.meta.env.VITE_APP_DOMAIN || window.location.host;
-      const uri = import.meta.env.VITE_APP_URI || window.location.origin;
+      const domain = window.location.host;
+      const uri = window.location.origin;
 
       const msg = new SiweMessage({
         domain,

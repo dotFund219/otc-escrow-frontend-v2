@@ -1,5 +1,7 @@
 import React from "react";
 import { markets } from "./markets.mock";
+import { useBinanceTickers } from "../../hooks/useBinanceTickers";
+import { formatVolB } from "../../lib/tokenMeta";
 
 export type Market = (typeof markets)[number];
 
@@ -22,20 +24,25 @@ export function MarketsPanel({
 
   const selectedSymbol = isControlled ? value : internal;
 
-  const handleSelect = (m: Market) => {
-    if (!isControlled) setInternal(m.symbol);
-    onSelect?.(m);
-  };
+  const binanceSymbols = React.useMemo(
+    () => markets.map((m) => m.binanceSymbol),
+    [],
+  );
+  const tickers = useBinanceTickers(binanceSymbols);
 
-  // 🔎 검색 필터
   const filtered = React.useMemo(() => {
-    if (!query.trim()) return markets;
-    const q = query.toLowerCase();
+    const q = query.trim().toLowerCase();
+    if (!q) return markets;
     return markets.filter(
       (m) =>
         m.symbol.toLowerCase().includes(q) || m.name.toLowerCase().includes(q),
     );
   }, [query]);
+
+  const handleSelect = (m: Market) => {
+    if (!isControlled) setInternal(m.symbol);
+    onSelect?.(m);
+  };
 
   return (
     <div className="panel p-5">
@@ -53,6 +60,11 @@ export function MarketsPanel({
       <div className="mt-4 flex flex-col gap-2">
         {filtered.map((m) => {
           const selected = m.symbol === selectedSymbol;
+
+          const t = tickers[m.binanceSymbol];
+          const price = t?.last ?? m.price;
+          const change24h = t?.changePct ?? m.change24h;
+          const volText = t ? formatVolB(t.quoteVol) : m.vol;
 
           return (
             <button
@@ -74,20 +86,22 @@ export function MarketsPanel({
 
                 <div className="text-right">
                   <div className="font-semibold">
-                    ${m.price.toLocaleString()}
+                    $
+                    {Number(price).toLocaleString(undefined, {
+                      maximumFractionDigits: 6,
+                    })}
                   </div>
+
                   <div
-                    className={`text-xs ${
-                      m.change24h >= 0 ? "text-emerald-300" : "text-red-300"
-                    }`}
+                    className={`text-xs ${change24h >= 0 ? "text-emerald-300" : "text-red-300"}`}
                   >
-                    {m.change24h >= 0 ? "+" : ""}
-                    {m.change24h.toFixed(2)}%
+                    {change24h >= 0 ? "+" : ""}
+                    {Number(change24h).toFixed(2)}%
                   </div>
                 </div>
               </div>
 
-              <div className="mt-2 text-xs muted">Vol {m.vol}</div>
+              <div className="mt-2 text-xs muted">Vol {volText}</div>
             </button>
           );
         })}

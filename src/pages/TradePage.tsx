@@ -38,7 +38,7 @@ export function TradePage() {
 
   return (
     <div className="grid grid-cols-[320px_1fr_360px] gap-6">
-      <MarketsPanel onSelect={onMarketChange} />
+      <MarketsPanel value={market.symbol} onSelect={onMarketChange} />
 
       <div className="flex flex-col gap-6">
         <div className="panel p-6">

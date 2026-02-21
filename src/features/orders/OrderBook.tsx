@@ -1,6 +1,7 @@
 import clsx from "clsx";
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import {
+  fetchOrders,
   fetchPublicOrderBook,
   type OrderStatus,
   type OtcOrder,
@@ -15,6 +16,7 @@ import { SubmitTxIdDialog } from "../../components/ui/dialog/SubmitTxIdDialog";
 import { submitDeliveryTx } from "../../lib/web3/submitDeliveryTx";
 import { ConfirmReceiptDialog } from "../../components/ui/dialog/ConfirmReceiptDialog";
 import { confirmReceipt } from "../../lib/web3/confirmReceipt";
+import { useSiweAuth } from "../auth/useSiweAuth";
 
 function shortAddr(a?: string | null, left = 6, right = 4) {
   if (!a) return "-";
@@ -24,6 +26,8 @@ function shortAddr(a?: string | null, left = 6, right = 4) {
 
 export function OrderBook({ compact }: { compact?: boolean }) {
   const toast = useToast();
+
+  const { token } = useSiweAuth();
 
   const REFRESH_SEC = 5;
   const [countdown, setCountdown] = useState(REFRESH_SEC);
@@ -85,7 +89,10 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     setErr(null);
 
     try {
-      const data = await fetchPublicOrderBook({ chainId, limit });
+      const data =
+        compact == undefined
+          ? await fetchPublicOrderBook({ chainId, limit })
+          : await fetchOrders(token!);
       const list = data.orders ?? [];
       setOrders(list);
       setNextCursor(data.nextCursor ?? null);

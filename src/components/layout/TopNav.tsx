@@ -3,13 +3,36 @@ import { AuthWidget } from "../../features/auth/AuthWidget";
 
 function NavItem({ to, label }: { to: string; label: string }) {
   return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `pill ${isActive ? "border-emerald-400/40 bg-emerald-500/10" : ""}`
-      }
-    >
-      {label}
+    <NavLink to={to}>
+      {({ isActive }) => (
+        <div
+          className={`
+            relative px-4 py-2 rounded-xl text-sm font-medium
+            transition-all duration-200 ease-out
+            cursor-pointer
+            ${
+              isActive
+                ? "text-emerald-200 bg-emerald-500/10 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                : "text-white/60 hover:text-white hover:bg-white/10 hover:-translate-y-[1px]"
+            }
+          `}
+        >
+          {label}
+
+          {/* Active underline indicator */}
+          <span
+            className={`
+              absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-6
+              rounded-full transition-all duration-300
+              ${
+                isActive
+                  ? "bg-emerald-400 opacity-100"
+                  : "bg-transparent opacity-0"
+              }
+            `}
+          />
+        </div>
+      )}
     </NavLink>
   );
 }

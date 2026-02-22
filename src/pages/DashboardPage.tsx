@@ -2,7 +2,7 @@ import { WalletBalancePanel } from "../features/wallet/WalletBalancePanel";
 import { OrderBook } from "../features/orders/OrderBook";
 import { useSiweAuth } from "../lib/useSiweAuth";
 import { useMe } from "../hooks/useMe";
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchOrderSumary } from "../lib/api/orders";
 import { ProfilePanel } from "../features/profile/ProfilePanel";
 

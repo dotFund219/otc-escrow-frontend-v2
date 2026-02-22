@@ -24,9 +24,42 @@ function shortAddr(a?: string | null, left = 6, right = 4) {
   return `${a.slice(0, left)}…${a.slice(-right)}`;
 }
 
+/** Matches your API shape: 401: {"message":"Unauthorized","statusCode":401} */
+function isUnauthorized(e: any): boolean {
+  if (!e) return false;
+
+  // 1. direct object
+  if (e.statusCode === 401 || e.status === 401) return true;
+  if (e.response?.status === 401) return true;
+  if (e.response?.data?.statusCode === 401) return true;
+
+  // 2. message string
+  const msg =
+    typeof e === "string" ? e : (e.message ?? e.response?.data?.message ?? "");
+
+  const lower = String(msg).toLowerCase();
+
+  if (lower.includes("unauthorized")) return true;
+  if (lower.includes("401")) return true;
+
+  // 3. extract JSON inside string
+  // e.g. "Orders API error 401: {\"message\":\"unauthorized\",\"statuscode\":401}"
+  const match = lower.match(/\{.*\}/);
+
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (parsed.statuscode === 401) return true;
+      if (parsed.statusCode === 401) return true;
+      if (parsed.message?.toLowerCase() === "unauthorized") return true;
+    } catch {}
+  }
+
+  return false;
+}
+
 export function OrderBook({ compact }: { compact?: boolean }) {
   const toast = useToast();
-
   const { token } = useSiweAuth();
 
   const REFRESH_SEC = 5;
@@ -59,6 +92,10 @@ export function OrderBook({ compact }: { compact?: boolean }) {
 
   const [takingId, setTakingId] = useState<string | null>(null);
 
+  // ✅ compact(private orders) auth state
+  const [authRequired, setAuthRequired] = useState(false);
+  const authToastShownRef = useRef(false);
+
   async function loadTokenMeta(list: OtcOrder[]) {
     try {
       const uniq = new Set<string>();
@@ -85,24 +122,60 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     }
   }
 
+  const enterAuthRequired = () => {
+    setAuthRequired(true);
+    setOrders([]);
+    setNextCursor(null);
+    setHasLoadedMore(false);
+    setErr(null);
+
+    // show toast only once (more “exchange-like” UX)
+    if (!authToastShownRef.current) {
+      authToastShownRef.current = true;
+      toast.error("Session expired. Please sign in to view your orders.", {
+        title: "Authentication required",
+      });
+    }
+  };
+
+  const exitAuthRequired = () => {
+    setAuthRequired(false);
+    authToastShownRef.current = false;
+  };
+
   // ✅ load first page (refresh)
   const loadFirstPage = async () => {
     setLoading(true);
     setErr(null);
+
+    // compact(private) mode: if no token, show CTA
+    if (compact !== undefined && !token) {
+      enterAuthRequired();
+      setLoading(false);
+      return;
+    }
 
     try {
       const data =
         compact == undefined
           ? await fetchPublicOrderBook({ chainId, limit })
           : await fetchOrders(token!);
+
       const list = data.orders ?? [];
       setOrders(list);
       setNextCursor(data.nextCursor ?? null);
       setHasLoadedMore(false);
 
+      if (compact !== undefined) exitAuthRequired();
+
       await loadTokenMeta(list);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load orderbook");
+      // ✅ compact(private) mode: 401 => show CTA instead of errors
+      if (compact !== undefined && isUnauthorized(e)) {
+        enterAuthRequired();
+      } else {
+        setErr(e?.message ?? "Failed to load orderbook");
+      }
     } finally {
       setLoading(false);
     }
@@ -160,18 +233,15 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       if (t) window.clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chainId, hasLoadedMore]);
+  }, [chainId, hasLoadedMore, compact, token]);
 
   useEffect(() => {
     if (countdown !== REFRESH_SEC) return;
 
-    // Because countdown resets from 1 to 5,
-    // triggering the refresh here yields an exact 5‑second interval.
-    // However, the initial 5 on first render also hits here, so guard against that.
-    if (refreshingRef.current) return;
+    // ✅ compact + authRequired => stop hammering API
+    if (compact !== undefined && authRequired) return;
 
-    // initial entry guard: skip if orders empty and loading
-    // (can remove if unnecessary)
+    if (refreshingRef.current) return;
     if (loading) return;
 
     refreshingRef.current = true;
@@ -197,7 +267,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
         refreshingRef.current = false;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown]);
+  }, [countdown, authRequired, compact]);
 
   const onTakeOrder = async (orderId: string) => {
     if (!isConnected || !address) {
@@ -207,7 +277,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       return;
     }
 
-    if (takingId) return; // skip if another take is already in progress (optional)
+    if (takingId) return;
 
     const order = orders.find((o) => o.orderId === orderId);
     if (!order) {
@@ -227,7 +297,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       });
 
       toast.success("Order taken successfully", { title: "Success" });
-      await loadFirstPage(); // ✅ refresh UI
+      await loadFirstPage();
     } catch (e: any) {
       toast.error("Failed to take order: " + (e?.message ?? "Unknown error"), {
         title: "Error",
@@ -248,15 +318,24 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     );
   }
 
+  const STATUS_STYLE: Record<OrderStatus, string> = {
+    OPEN: "bg-emerald-500/10 text-emerald-200 border-emerald-400/15",
+    TAKEN: "bg-amber-500/10 text-amber-200 border-amber-400/15",
+    DELIVERED: "bg-sky-500/10 text-sky-200 border-sky-400/15",
+    FINISHED: "bg-violet-500/10 text-violet-200 border-violet-400/15",
+    CANCELLED: "bg-white/5 text-white/60 border-white/10",
+  };
+
   return (
     <div
       className={clsx("panel p-6", compact && "p-0 bg-transparent shadow-none")}
     >
-      {loading && orders.length === 0 && (
+      {loading && orders.length === 0 && !authRequired && (
         <div className="border-t border-white/10 px-4 py-6 text-sm muted">
           Loading order book...
         </div>
       )}
+
       {!compact && (
         <div className="flex items-center justify-between">
           <div>
@@ -283,361 +362,402 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       )}
 
       <div className={clsx("mt-4", compact && "mt-0")}>
-        <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 overflow-hidden">
-          <div className="max-h-[520px] overflow-auto">
-            {/* ✅ Sticky header */}
-            <div
-              className="sticky top-0 z-10 grid grid-cols-7
-  bg-black/60 backdrop-blur-xl
-  text-[11px] tracking-wider text-white/45
-  px-4 py-2 border-b border-white/10"
-            >
-              <div>TYPE</div>
-              <div>PAIR</div>
-              <div className="text-right">QUANTITY</div>
-              <div className="text-right">PRICE</div>
-              <div className="text-right">TOTAL</div>
-              <div className="text-center">STATUS</div>
-              <div className="text-right">ACTION</div>
-            </div>
+        {/* ✅ compact/private + token expired => exchange-like CTA */}
+        {compact !== undefined && authRequired && (
+          <div className="rounded-2xl border border-white/10 bg-black/25 overflow-hidden">
+            <div className="px-5 py-10 text-center">
+              <div className="text-3xl opacity-60 mb-3">🔒</div>
 
-            {err && (
-              <div className="px-4 py-3 text-sm border-t border-white/10 text-red-200">
-                {err}
+              <div className="text-sm font-semibold text-zinc-200">
+                Login required
               </div>
-            )}
 
-            {!err && orders.length === 0 && (
-              <div className="border-t border-white/10">
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="text-4xl opacity-40 mb-3">📭</div>
-
-                  <div className="text-sm font-medium text-zinc-300">
-                    No open orders
-                  </div>
-
-                  <div className="text-xs text-zinc-500 mt-1">
-                    There are currently no active orders for this pair.
-                  </div>
-
-                  <button
-                    className="btn mt-4 px-4 py-2 text-xs"
-                    onClick={loadFirstPage}
-                  >
-                    Refresh
-                  </button>
-                </div>
+              <div className="text-xs text-zinc-500 mt-2">
+                Your session has expired. Sign in to view your orders.
               </div>
-            )}
 
-            {orders.map((o) => {
-              const sellAddr = o.sellToken.toLowerCase();
-              const quoteAddr = o.quoteToken.toLowerCase();
-
-              const sellMeta = meta[sellAddr] ?? {
-                symbol: shortAddr(o.sellToken),
-                decimals: 18,
-              };
-              const quoteMeta = meta[quoteAddr] ?? {
-                symbol: shortAddr(o.quoteToken),
-                decimals: 18,
-              };
-
-              const qtyHuman = formatUnits(o.sellAmount, sellMeta.decimals, 6);
-              const totalHuman = formatUnits(
-                o.quoteAmount,
-                quoteMeta.decimals,
-                4,
-              );
-
-              const priceHuman = formatPrice(
-                o.quoteAmount,
-                quoteMeta.decimals,
-                o.sellAmount,
-                sellMeta.decimals,
-                6,
-              );
-
-              const pair = `${sellMeta.symbol}/${quoteMeta.symbol}`;
-
-              const STATUS_STYLE: Record<OrderStatus, string> = {
-                OPEN: "bg-emerald-500/10 text-emerald-200 border-emerald-400/15",
-                TAKEN: "bg-amber-500/10 text-amber-200 border-amber-400/15",
-                DELIVERED: "bg-sky-500/10 text-sky-200 border-sky-400/15",
-                FINISHED:
-                  "bg-violet-500/10 text-violet-200 border-violet-400/15",
-                CANCELLED: "bg-white/5 text-white/60 border-white/10",
-              };
-
-              const TYPE_STYLE: Record<string, string> = {
-                SELL: "bg-red-500/10 border-red-400/20 text-red-300",
-                BUY: "bg-emerald-500/10 border-emerald-400/20 text-emerald-300",
-                UNKNOWN: "bg-white/5 border-white/10 text-white/50",
-              };
-
-              const role =
-                o.seller?.toLowerCase() === address?.toLowerCase()
-                  ? "SELL"
-                  : o.buyer?.toLowerCase() === address?.toLowerCase()
-                    ? "BUY"
-                    : "NOT TAKEN";
-
-              return (
-                <div
-                  key={`${o.chainId}:${o.orderId}`}
-                  className={clsx(
-                    "grid grid-cols-7 px-4 py-3 text-sm border-b border-white/5",
-                    "hover:bg-white/[0.04] hover:border-white/10 transition",
-                  )}
+              <div className="mt-5 flex items-center justify-center gap-2">
+                <a
+                  href="/auth"
+                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-semibold
+                  bg-emerald-500/90 hover:bg-emerald-500 text-black transition"
                 >
-                  <div className="flex items-center">
-                    <span
-                      className={clsx(
-                        "inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
-                        TYPE_STYLE[role],
-                      )}
+                  Sign in / Create account
+                </a>
+
+                <button
+                  className="btn px-4 py-2 text-xs"
+                  onClick={() => {
+                    setCountdown(REFRESH_SEC);
+                    loadFirstPage();
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Normal orderbook table */}
+        {!(compact !== undefined && authRequired) && (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 overflow-hidden">
+            <div className="max-h-[520px] overflow-auto">
+              {/* ✅ Sticky header */}
+              <div
+                className="sticky top-0 z-10 grid grid-cols-7
+                bg-black/60 backdrop-blur-xl
+                text-[11px] tracking-wider text-white/45
+                px-4 py-2 border-b border-white/10"
+              >
+                <div>TYPE</div>
+                <div>PAIR</div>
+                <div className="text-right">QUANTITY</div>
+                <div className="text-right">PRICE</div>
+                <div className="text-right">TOTAL</div>
+                <div className="text-center">STATUS</div>
+                <div className="text-right">ACTION</div>
+              </div>
+
+              {err && (
+                <div className="px-4 py-3 text-sm border-t border-white/10 text-red-200">
+                  {err}
+                </div>
+              )}
+
+              {!err && orders.length === 0 && (
+                <div className="border-t border-white/10">
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="text-4xl opacity-40 mb-3">📭</div>
+
+                    <div className="text-sm font-medium text-zinc-300">
+                      No open orders
+                    </div>
+
+                    <div className="text-xs text-zinc-500 mt-1">
+                      There are currently no active orders for this pair.
+                    </div>
+
+                    <button
+                      className="btn mt-4 px-4 py-2 text-xs"
+                      onClick={loadFirstPage}
                     >
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {orders.map((o) => {
+                const sellAddr = o.sellToken.toLowerCase();
+                const quoteAddr = o.quoteToken.toLowerCase();
+
+                const sellMeta = meta[sellAddr] ?? {
+                  symbol: shortAddr(o.sellToken),
+                  decimals: 18,
+                };
+                const quoteMeta = meta[quoteAddr] ?? {
+                  symbol: shortAddr(o.quoteToken),
+                  decimals: 18,
+                };
+
+                const qtyHuman = formatUnits(
+                  o.sellAmount,
+                  sellMeta.decimals,
+                  6,
+                );
+                const totalHuman = formatUnits(
+                  o.quoteAmount,
+                  quoteMeta.decimals,
+                  4,
+                );
+
+                const priceHuman = formatPrice(
+                  o.quoteAmount,
+                  quoteMeta.decimals,
+                  o.sellAmount,
+                  sellMeta.decimals,
+                  6,
+                );
+
+                const pair = `${sellMeta.symbol}/${quoteMeta.symbol}`;
+
+                const TYPE_STYLE: Record<string, string> = {
+                  SELL: "bg-red-500/10 border-red-400/20 text-red-300",
+                  BUY: "bg-emerald-500/10 border-emerald-400/20 text-emerald-300",
+                  UNKNOWN: "bg-white/5 border-white/10 text-white/50",
+                  "NOT TAKEN": "bg-white/5 border-white/10 text-white/50",
+                };
+
+                const role =
+                  o.seller?.toLowerCase() === address?.toLowerCase()
+                    ? "SELL"
+                    : o.buyer?.toLowerCase() === address?.toLowerCase()
+                      ? "BUY"
+                      : "NOT TAKEN";
+
+                return (
+                  <div
+                    key={`${o.chainId}:${o.orderId}`}
+                    className={clsx(
+                      "grid grid-cols-7 px-4 py-3 text-sm border-b border-white/5",
+                      "hover:bg-white/[0.04] hover:border-white/10 transition",
+                    )}
+                  >
+                    <div className="flex items-center">
                       <span
                         className={clsx(
-                          "w-1.5 h-1.5 rounded-full",
-                          role === "SELL"
-                            ? "bg-red-400"
-                            : role === "BUY"
-                              ? "bg-emerald-400"
-                              : "bg-white/40",
+                          "inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
+                          TYPE_STYLE[role],
                         )}
-                      />
-                      {role}
-                    </span>
-                  </div>
+                      >
+                        <span
+                          className={clsx(
+                            "w-1.5 h-1.5 rounded-full",
+                            role === "SELL"
+                              ? "bg-red-400"
+                              : role === "BUY"
+                                ? "bg-emerald-400"
+                                : "bg-white/40",
+                          )}
+                        />
+                        {role}
+                      </span>
+                    </div>
 
-                  {/* PAIR */}
-                  <div className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
-                    {pair}
-                  </div>
+                    {/* PAIR */}
+                    <div className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+                      {pair}
+                    </div>
 
-                  {/* QUANTITY */}
-                  <div className="text-right tabular-nums whitespace-nowrap">
-                    {qtyHuman}{" "}
-                    <span className="text-white/45">{sellMeta.symbol}</span>
-                  </div>
+                    {/* QUANTITY */}
+                    <div className="text-right tabular-nums whitespace-nowrap">
+                      {qtyHuman}{" "}
+                      <span className="text-white/45">{sellMeta.symbol}</span>
+                    </div>
 
-                  {/* PRICE */}
-                  <div className="text-right tabular-nums whitespace-nowrap">
-                    {priceHuman}{" "}
-                    <span className="text-white/45">{quoteMeta.symbol}</span>
-                  </div>
+                    {/* PRICE */}
+                    <div className="text-right tabular-nums whitespace-nowrap">
+                      {priceHuman}{" "}
+                      <span className="text-white/45">{quoteMeta.symbol}</span>
+                    </div>
 
-                  {/* TOTAL */}
-                  <div className="text-right tabular-nums whitespace-nowrap">
-                    {totalHuman}{" "}
-                    <span className="text-white/45">{quoteMeta.symbol}</span>
-                  </div>
+                    {/* TOTAL */}
+                    <div className="text-right tabular-nums whitespace-nowrap">
+                      {totalHuman}{" "}
+                      <span className="text-white/45">{quoteMeta.symbol}</span>
+                    </div>
 
-                  {/* STATUS */}
-                  <div className="flex justify-center">
-                    <span
-                      className={clsx(
-                        "inline-flex justify-center w-[110px] h-[24px] whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
-                        STATUS_STYLE[o.status],
-                      )}
-                    >
-                      {o.status}
-                    </span>
-                  </div>
+                    {/* STATUS */}
+                    <div className="flex justify-center">
+                      <span
+                        className={clsx(
+                          "inline-flex justify-center w-[110px] h-[24px] whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
+                          STATUS_STYLE[o.status],
+                        )}
+                      >
+                        {o.status}
+                      </span>
+                    </div>
 
-                  <div className="text-right">
-                    {(() => {
-                      const isSeller =
-                        address &&
-                        o.seller?.toLowerCase() === address.toLowerCase();
-                      const isBuyer =
-                        address &&
-                        o.buyer?.toLowerCase() === address.toLowerCase();
+                    {/* ACTION */}
+                    <div className="text-right">
+                      {(() => {
+                        const isSeller =
+                          address &&
+                          o.seller?.toLowerCase() === address.toLowerCase();
+                        const isBuyer =
+                          address &&
+                          o.buyer?.toLowerCase() === address.toLowerCase();
 
-                      // 🔴 OPEN
-                      if (o.status === "OPEN") {
-                        const isTakingThis = takingId === o.orderId;
-                        if (!isConnected) {
+                        // 🔴 OPEN
+                        if (o.status === "OPEN") {
+                          const isTakingThis = takingId === o.orderId;
+
+                          if (!isConnected) {
+                            return (
+                              <button
+                                className="btn py-1 px-3 text-xs"
+                                onClick={() =>
+                                  toast.error("Connect wallet first")
+                                }
+                              >
+                                Connect
+                              </button>
+                            );
+                          }
+
+                          if (isSeller) {
+                            return (
+                              <button
+                                disabled
+                                className="
+                                  inline-flex items-center justify-center
+                                  rounded-xl px-4 py-1.5 text-xs font-medium
+                                  bg-white/5 border border-white/10
+                                  text-white/40
+                                  cursor-not-allowed
+                                "
+                              >
+                                Your Order
+                              </button>
+                            );
+                          }
+
                           return (
                             <button
-                              className="btn py-1 px-3 text-xs"
-                              onClick={() =>
-                                toast.error("Connect wallet first")
-                              }
+                              disabled={isTakingThis}
+                              className={clsx(
+                                "inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold transition",
+                                isTakingThis
+                                  ? "bg-emerald-500/40 text-black/70 cursor-not-allowed"
+                                  : "bg-emerald-500/90 hover:bg-emerald-500 text-black cursor-pointer",
+                              )}
+                              onClick={() => onTakeOrder(o.orderId)}
                             >
-                              Connect
+                              {isTakingThis ? (
+                                <span className="inline-flex items-center gap-2">
+                                  <Spinner />
+                                  Taking…
+                                </span>
+                              ) : (
+                                "Take"
+                              )}
                             </button>
                           );
                         }
 
-                        if (isSeller) {
-                          return (
-                            <button
-                              disabled
-                              className="
-    inline-flex items-center justify-center
-    rounded-xl px-4 py-1.5 text-xs font-medium
-    bg-white/5 border border-white/10
-    text-white/40
-    cursor-not-allowed
-  "
-                            >
-                              Your Order
-                            </button>
-                          );
-                        }
-
-                        return (
-                          <button
-                            disabled={isTakingThis}
-                            className={clsx(
-                              "inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold transition",
-                              isTakingThis
-                                ? "bg-emerald-500/40 text-black/70 cursor-not-allowed"
-                                : "bg-emerald-500/90 hover:bg-emerald-500 text-black cursor-pointer",
-                            )}
-                            onClick={() => onTakeOrder(o.orderId)}
-                          >
-                            {isTakingThis ? (
-                              <span className="inline-flex items-center gap-2">
-                                <Spinner />
-                                Taking…
-                              </span>
-                            ) : (
-                              "Take"
-                            )}
-                          </button>
-                        );
-                      }
-
-                      // 🟡 TAKEN
-                      if (o.status === "TAKEN") {
-                        if (isSeller) {
-                          return (
-                            <button
-                              className="btn btn-primary py-1 px-3 text-xs"
-                              onClick={() => {
-                                setTxidOrderId(o.orderId);
-                                setTxidOpen(true);
-                              }}
-                            >
-                              Submit TXID
-                            </button>
-                          );
-                        }
-
-                        if (isBuyer) {
-                          return (
-                            <button
-                              className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                              disabled
-                            >
-                              Waiting Seller
-                            </button>
-                          );
-                        }
-
-                        return (
-                          <button
-                            className="inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs
-    bg-white/5 border border-white/10 text-white/50 cursor-not-allowed"
-                            disabled
-                          >
-                            Locked
-                          </button>
-                        );
-                      }
-
-                      // 🔵 DELIVERED
-                      if (o.status === "DELIVERED") {
-                        if (isBuyer) {
-                          return (
-                            <div>
+                        // 🟡 TAKEN
+                        if (o.status === "TAKEN") {
+                          if (isSeller) {
+                            return (
                               <button
                                 className="btn btn-primary py-1 px-3 text-xs"
                                 onClick={() => {
-                                  setConfirmOrderId(o.orderId);
-                                  setConfirmOpen(true);
+                                  setTxidOrderId(o.orderId);
+                                  setTxidOpen(true);
                                 }}
                               >
-                                Confirm
+                                Submit TXID
                               </button>
+                            );
+                          }
+
+                          if (isBuyer) {
+                            return (
                               <button
-                                className="btn btn-danger py-1 px-3 ms-1 text-xs"
-                                onClick={() => {
-                                  console.log("reject tx", o.orderId);
-                                }}
+                                className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                                disabled
                               >
-                                Reject
+                                Waiting Seller
                               </button>
-                            </div>
+                            );
+                          }
+
+                          return (
+                            <button
+                              className="inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs
+                              bg-white/5 border border-white/10 text-white/50 cursor-not-allowed"
+                              disabled
+                            >
+                              Locked
+                            </button>
                           );
                         }
 
-                        if (isSeller) {
+                        // 🔵 DELIVERED
+                        if (o.status === "DELIVERED") {
+                          if (isBuyer) {
+                            return (
+                              <div>
+                                <button
+                                  className="btn btn-primary py-1 px-3 text-xs"
+                                  onClick={() => {
+                                    setConfirmOrderId(o.orderId);
+                                    setConfirmOpen(true);
+                                  }}
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="btn btn-danger py-1 px-3 ms-1 text-xs"
+                                  onClick={() => {
+                                    console.log("reject tx", o.orderId);
+                                  }}
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          if (isSeller) {
+                            return (
+                              <button
+                                className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                                disabled
+                              >
+                                Waiting Confirmation
+                              </button>
+                            );
+                          }
+
                           return (
                             <button
                               className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
                               disabled
                             >
-                              Waiting Confirmation
+                              Delivered
                             </button>
                           );
                         }
 
-                        return (
-                          <button
-                            className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                            disabled
-                          >
-                            Delivered
-                          </button>
-                        );
-                      }
+                        // ⚫ FINISHED
+                        if (o.status === "FINISHED") {
+                          return (
+                            <button
+                              className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                              disabled
+                            >
+                              Completed
+                            </button>
+                          );
+                        }
 
-                      // ⚫ FINISHED
-                      if (o.status === "FINISHED") {
-                        return (
-                          <button
-                            className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                            disabled
-                          >
-                            Completed
-                          </button>
-                        );
-                      }
-
-                      return null;
-                    })()}
+                        return null;
+                      })()}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
-      {/* ✅ Pagination footer */}
-      <div className="px-2 py-3 flex items-center justify-between">
-        <div className="text-xs text-white/50">
-          Showing{" "}
-          <span className="text-white/80 font-semibold">{orders.length}</span>{" "}
-          orders
-        </div>
 
-        <button
-          className={clsx(
-            "rounded-xl px-3 py-1.5 text-xs font-medium border transition",
-            nextCursor
-              ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-white"
-              : "bg-white/5 border-white/10 text-white/40 cursor-not-allowed",
-          )}
-          disabled={!nextCursor || loadingMore}
-          onClick={loadMore}
-        >
-          {loadingMore ? "Loading…" : nextCursor ? "Load more" : "No more"}
-        </button>
-      </div>
+      {/* ✅ Pagination footer (public only). If compact/private, you can hide it */}
+      {compact == undefined && (
+        <div className="px-2 py-3 flex items-center justify-between">
+          <div className="text-xs text-white/50">
+            Showing{" "}
+            <span className="text-white/80 font-semibold">{orders.length}</span>{" "}
+            orders
+          </div>
+
+          <button
+            className={clsx(
+              "rounded-xl px-3 py-1.5 text-xs font-medium border transition",
+              nextCursor
+                ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-white"
+                : "bg-white/5 border-white/10 text-white/40 cursor-not-allowed",
+            )}
+            disabled={!nextCursor || loadingMore}
+            onClick={loadMore}
+          >
+            {loadingMore ? "Loading…" : nextCursor ? "Load more" : "No more"}
+          </button>
+        </div>
+      )}
 
       <SubmitTxIdDialog
         open={txidOpen}
@@ -662,13 +782,13 @@ export function OrderBook({ compact }: { compact?: boolean }) {
             });
 
             toast.success("TXID submitted on-chain", { title: "Success" });
-
             await loadFirstPage();
           } catch (e: any) {
             toast.error(e.message || "Submit failed", { title: "Error" });
           }
         }}
       />
+
       <ConfirmReceiptDialog
         open={confirmOpen}
         orderId={confirmOrderId}
@@ -717,10 +837,6 @@ export function OrderBook({ compact }: { compact?: boolean }) {
             });
             return;
           }
-          // if (!confirmTxid || !String(confirmTxid).trim()) {
-          //   toast.error("TXID not available.", { title: "Cannot confirm" });
-          //   return;
-          // }
 
           try {
             setConfirmingId(confirmOrder.orderId);

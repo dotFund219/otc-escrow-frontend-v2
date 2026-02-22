@@ -123,6 +123,8 @@ export default function PriceChart({
           // update last time (optional)
           lastTimeSec = candle.time as number;
 
+          console.log("Received candle update:", lastTimeSec);
+
           // optionally, auto-scroll toward the latest candle
           // chart.timeScale().scrollToRealTime();
         } catch {

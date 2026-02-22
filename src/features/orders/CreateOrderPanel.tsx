@@ -62,12 +62,12 @@ export function CreateOrderPanel() {
   const quoteToken = ADDR.tokens[quoteKey];
 
   // ✅ (for estimates) reading quote token decimals yields more accurate display
-  const { data: quoteDecimals } = useReadContract({
-    abi: ERC20_ABI,
-    address: quoteToken,
-    functionName: "decimals",
-    args: [],
-  });
+  // const { data: quoteDecimals } = useReadContract({
+  //   abi: ERC20_ABI,
+  //   address: quoteToken,
+  //   functionName: "decimals",
+  //   args: [],
+  // });
 
   // ✅ fetch price/changes/volume via Binance live ticker
   const priceSymbol = useMemo(

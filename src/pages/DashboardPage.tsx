@@ -2,11 +2,40 @@ import { WalletBalancePanel } from "../features/wallet/WalletBalancePanel";
 import { OrderBook } from "../features/orders/OrderBook";
 import { useSiweAuth } from "../lib/useSiweAuth";
 import { useMe } from "../hooks/useMe";
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
+import { fetchOrderSumary } from "../lib/api/orders";
+
+type OrderSummary = {
+  total: number;
+  active: number;
+  completed: number;
+};
 
 export function DashboardPage() {
   const { token } = useSiweAuth();
   const { me } = token ? useMe(token) : { me: null };
+  const [orderSummary, setOrderSummary] = useState<OrderSummary | null>(null);
+
+  useEffect(() => {
+    if (token) {
+      Promise.resolve()
+        .then(async () => {
+          const sumary = await fetchOrderSumary(token);
+
+          const orderSummary: OrderSummary = {
+            total: sumary.summary.total,
+            active:
+              sumary.summary.delivered +
+              sumary.summary.open +
+              sumary.summary.taken,
+            completed: sumary.summary.finished,
+          };
+
+          setOrderSummary(orderSummary);
+        })
+        .finally(() => {});
+    }
+  }, [token]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -21,20 +50,24 @@ export function DashboardPage() {
         <div className="kpi">
           <div>
             <div className="muted text-sm">Total Orders</div>
-            <div className="text-4xl font-semibold mt-2">1</div>
+            <div className="text-4xl font-semibold mt-2">
+              {orderSummary?.total || 0}
+            </div>
           </div>
         </div>
         <div className="kpi">
           <div>
             <div className="muted text-sm">Active</div>
-            <div className="text-4xl font-semibold mt-2 text-yellow-300">1</div>
+            <div className="text-4xl font-semibold mt-2 text-yellow-300">
+              {orderSummary?.active || 0}
+            </div>
           </div>
         </div>
         <div className="kpi">
           <div>
             <div className="muted text-sm">Completed</div>
             <div className="text-4xl font-semibold mt-2 text-emerald-300">
-              0
+              {orderSummary?.completed || 0}
             </div>
           </div>
         </div>

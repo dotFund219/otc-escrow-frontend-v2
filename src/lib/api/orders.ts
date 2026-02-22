@@ -96,3 +96,22 @@ export async function fetchPublicOrderBook(params?: {
   }
   return res.json();
 }
+
+export async function fetchOrderSumary(jwt: string) {
+  const url = `${API_BASE}/orders/summary`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Orders API error ${res.status}: ${text}`);
+  }
+
+  return res.json();
+}

@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { use, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   fetchOrders,
   fetchPublicOrderBook,
@@ -56,6 +56,8 @@ export function OrderBook({ compact }: { compact?: boolean }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmOrderId, setConfirmOrderId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const [takingId, setTakingId] = useState<string | null>(null);
 
   async function loadTokenMeta(list: OtcOrder[]) {
     try {
@@ -197,7 +199,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdown]);
 
-  const onTakeOrder = (orderId: string) => {
+  const onTakeOrder = async (orderId: string) => {
     if (!isConnected || !address) {
       toast.error("Please connect your wallet first.", {
         title: "Wallet not connected",
@@ -205,27 +207,46 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       return;
     }
 
-    const sellToken = orders.find((o) => o.orderId === orderId)?.sellToken;
-    if (!sellToken) {
+    if (takingId) return; // skip if another take is already in progress (optional)
+
+    const order = orders.find((o) => o.orderId === orderId);
+    if (!order) {
       toast.error("Order not found", { title: "Error" });
       return;
     }
 
-    approveAndTakeOrder({
-      orderId,
-      chainId,
-      contract: ADDR.contracts.orders,
-      quoteToken: orders.find((o) => o.orderId === orderId)?.quoteToken ?? "",
-      quoteAmount:
-        orders.find((o) => o.orderId === orderId)?.quoteAmount ?? "0",
-    })
-      .then(() => {
-        toast.success("Order taken successfully", { title: "Success" });
-      })
-      .catch((e) => {
-        toast.error("Failed to take order: " + e.message, { title: "Error" });
+    try {
+      setTakingId(orderId);
+
+      await approveAndTakeOrder({
+        orderId,
+        chainId,
+        contract: ADDR.contracts.orders,
+        quoteToken: order.quoteToken,
+        quoteAmount: order.quoteAmount ?? "0",
       });
+
+      toast.success("Order taken successfully", { title: "Success" });
+      await loadFirstPage(); // ✅ refresh UI
+    } catch (e: any) {
+      toast.error("Failed to take order: " + (e?.message ?? "Unknown error"), {
+        title: "Error",
+      });
+    } finally {
+      setTakingId(null);
+    }
   };
+
+  function Spinner({ className }: { className?: string }) {
+    return (
+      <span
+        className={clsx(
+          "inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white",
+          className,
+        )}
+      />
+    );
+  }
 
   return (
     <div
@@ -238,11 +259,16 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       )}
       {!compact && (
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold">Order Book</div>
+          <div>
+            <div className="text-sm font-semibold">Order Book</div>
+            <div className="mt-1 text-xs text-white/50">
+              Live • {orders.length} orders
+            </div>
+          </div>
 
-          <div className="flex items-center gap-3">
-            <div className="pill text-xs">
-              Auto refresh in{" "}
+          <div className="flex items-center gap-2">
+            <div className="pill text-xs bg-white/5">
+              Refresh in{" "}
               <span className="font-semibold text-zinc-100">{countdown}s</span>
             </div>
             <IconRefreshButton
@@ -257,289 +283,362 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       )}
 
       <div className={clsx("mt-4", compact && "mt-0")}>
-        <div className="overflow-hidden rounded-xl border border-white/10">
-          {/* ✅ include STATUS column: grid-cols-7 */}
-          <div className="grid grid-cols-7 bg-white/5 text-xs muted px-4 py-2">
-            <div>TYPE</div>
-            <div>PAIR</div>
-            <div>QUANTITY</div>
-            <div>PRICE</div>
-            <div>TOTAL</div>
-            <div>STATUS</div>
-            <div className="text-right">ACTION</div>
-          </div>
-
-          {err && (
-            <div className="px-4 py-3 text-sm border-t border-white/10 text-red-200">
-              {err}
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 overflow-hidden">
+          <div className="max-h-[520px] overflow-auto">
+            {/* ✅ Sticky header */}
+            <div
+              className="sticky top-0 z-10 grid grid-cols-7
+  bg-black/60 backdrop-blur-xl
+  text-[11px] tracking-wider text-white/45
+  px-4 py-2 border-b border-white/10"
+            >
+              <div>TYPE</div>
+              <div>PAIR</div>
+              <div className="text-right">QUANTITY</div>
+              <div className="text-right">PRICE</div>
+              <div className="text-right">TOTAL</div>
+              <div className="text-center">STATUS</div>
+              <div className="text-right">ACTION</div>
             </div>
-          )}
 
-          {!err && orders.length === 0 && (
-            <div className="border-t border-white/10">
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-4xl opacity-40 mb-3">📭</div>
-
-                <div className="text-sm font-medium text-zinc-300">
-                  No open orders
-                </div>
-
-                <div className="text-xs text-zinc-500 mt-1">
-                  There are currently no active orders for this pair.
-                </div>
-
-                <button
-                  className="btn mt-4 px-4 py-2 text-xs"
-                  onClick={loadFirstPage}
-                >
-                  Refresh
-                </button>
+            {err && (
+              <div className="px-4 py-3 text-sm border-t border-white/10 text-red-200">
+                {err}
               </div>
-            </div>
-          )}
+            )}
 
-          {orders.map((o) => {
-            const sellAddr = o.sellToken.toLowerCase();
-            const quoteAddr = o.quoteToken.toLowerCase();
+            {!err && orders.length === 0 && (
+              <div className="border-t border-white/10">
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="text-4xl opacity-40 mb-3">📭</div>
 
-            const sellMeta = meta[sellAddr] ?? {
-              symbol: shortAddr(o.sellToken),
-              decimals: 18,
-            };
-            const quoteMeta = meta[quoteAddr] ?? {
-              symbol: shortAddr(o.quoteToken),
-              decimals: 18,
-            };
+                  <div className="text-sm font-medium text-zinc-300">
+                    No open orders
+                  </div>
 
-            const qtyHuman = formatUnits(o.sellAmount, sellMeta.decimals, 6);
-            const totalHuman = formatUnits(
-              o.quoteAmount,
-              quoteMeta.decimals,
-              2,
-            );
+                  <div className="text-xs text-zinc-500 mt-1">
+                    There are currently no active orders for this pair.
+                  </div>
 
-            const priceHuman = formatPrice(
-              o.quoteAmount,
-              quoteMeta.decimals,
-              o.sellAmount,
-              sellMeta.decimals,
-              6,
-            );
-
-            const pair = `${sellMeta.symbol}/${quoteMeta.symbol}`;
-
-            const STATUS_STYLE: Record<OrderStatus, string> = {
-              OPEN: "bg-emerald-500/15 text-emerald-300 border-emerald-400/20",
-
-              TAKEN: "bg-yellow-500/15 text-yellow-300 border-yellow-400/20",
-
-              DELIVERED: "bg-blue-500/15 text-blue-300 border-blue-400/20",
-
-              FINISHED: "bg-purple-500/15 text-purple-300 border-purple-400/20",
-
-              CANCELLED: "bg-zinc-500/15 text-zinc-300 border-zinc-400/20",
-            };
-
-            return (
-              <div
-                key={`${o.chainId}:${o.orderId}`}
-                className="grid grid-cols-7 px-4 py-3 text-sm border-t border-white/10"
-              >
-                <div>
-                  <span className="pill px-2 py-0.5 bg-red-500/15 border-red-400/20 text-red-200">
-                    SELL
-                  </span>
-                </div>
-
-                <div className="font-semibold">{pair}</div>
-
-                <div>
-                  {qtyHuman} {sellMeta.symbol}
-                </div>
-
-                <div>
-                  {priceHuman} {quoteMeta.symbol}
-                </div>
-
-                <div>
-                  {totalHuman} {quoteMeta.symbol}
-                </div>
-
-                <div>
-                  <span
-                    className={clsx("pill px-2 py-0.5", STATUS_STYLE[o.status])}
+                  <button
+                    className="btn mt-4 px-4 py-2 text-xs"
+                    onClick={loadFirstPage}
                   >
-                    {o.status}
-                  </span>
+                    Refresh
+                  </button>
                 </div>
+              </div>
+            )}
 
-                <div className="text-right">
-                  {(() => {
-                    const isSeller =
-                      address &&
-                      o.seller?.toLowerCase() === address.toLowerCase();
-                    const isBuyer =
-                      address &&
-                      o.buyer?.toLowerCase() === address.toLowerCase();
+            {orders.map((o) => {
+              const sellAddr = o.sellToken.toLowerCase();
+              const quoteAddr = o.quoteToken.toLowerCase();
 
-                    // 🔴 OPEN
-                    if (o.status === "OPEN") {
-                      if (!isConnected) {
+              const sellMeta = meta[sellAddr] ?? {
+                symbol: shortAddr(o.sellToken),
+                decimals: 18,
+              };
+              const quoteMeta = meta[quoteAddr] ?? {
+                symbol: shortAddr(o.quoteToken),
+                decimals: 18,
+              };
+
+              const qtyHuman = formatUnits(o.sellAmount, sellMeta.decimals, 6);
+              const totalHuman = formatUnits(
+                o.quoteAmount,
+                quoteMeta.decimals,
+                4,
+              );
+
+              const priceHuman = formatPrice(
+                o.quoteAmount,
+                quoteMeta.decimals,
+                o.sellAmount,
+                sellMeta.decimals,
+                6,
+              );
+
+              const pair = `${sellMeta.symbol}/${quoteMeta.symbol}`;
+
+              const STATUS_STYLE: Record<OrderStatus, string> = {
+                OPEN: "bg-emerald-500/10 text-emerald-200 border-emerald-400/15",
+                TAKEN: "bg-amber-500/10 text-amber-200 border-amber-400/15",
+                DELIVERED: "bg-sky-500/10 text-sky-200 border-sky-400/15",
+                FINISHED:
+                  "bg-violet-500/10 text-violet-200 border-violet-400/15",
+                CANCELLED: "bg-white/5 text-white/60 border-white/10",
+              };
+
+              const TYPE_STYLE: Record<string, string> = {
+                SELL: "bg-red-500/10 border-red-400/20 text-red-300",
+                BUY: "bg-emerald-500/10 border-emerald-400/20 text-emerald-300",
+                UNKNOWN: "bg-white/5 border-white/10 text-white/50",
+              };
+
+              const role =
+                o.seller?.toLowerCase() === address?.toLowerCase()
+                  ? "SELL"
+                  : o.buyer?.toLowerCase() === address?.toLowerCase()
+                    ? "BUY"
+                    : "NOT TAKEN";
+
+              return (
+                <div
+                  key={`${o.chainId}:${o.orderId}`}
+                  className={clsx(
+                    "grid grid-cols-7 px-4 py-3 text-sm border-b border-white/5",
+                    "hover:bg-white/[0.04] hover:border-white/10 transition",
+                  )}
+                >
+                  <div className="flex items-center">
+                    <span
+                      className={clsx(
+                        "inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
+                        TYPE_STYLE[role],
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          "w-1.5 h-1.5 rounded-full",
+                          role === "SELL"
+                            ? "bg-red-400"
+                            : role === "BUY"
+                              ? "bg-emerald-400"
+                              : "bg-white/40",
+                        )}
+                      />
+                      {role}
+                    </span>
+                  </div>
+
+                  {/* PAIR */}
+                  <div className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+                    {pair}
+                  </div>
+
+                  {/* QUANTITY */}
+                  <div className="text-right tabular-nums whitespace-nowrap">
+                    {qtyHuman}{" "}
+                    <span className="text-white/45">{sellMeta.symbol}</span>
+                  </div>
+
+                  {/* PRICE */}
+                  <div className="text-right tabular-nums whitespace-nowrap">
+                    {priceHuman}{" "}
+                    <span className="text-white/45">{quoteMeta.symbol}</span>
+                  </div>
+
+                  {/* TOTAL */}
+                  <div className="text-right tabular-nums whitespace-nowrap">
+                    {totalHuman}{" "}
+                    <span className="text-white/45">{quoteMeta.symbol}</span>
+                  </div>
+
+                  {/* STATUS */}
+                  <div className="flex justify-center">
+                    <span
+                      className={clsx(
+                        "inline-flex justify-center w-[110px] h-[24px] whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
+                        STATUS_STYLE[o.status],
+                      )}
+                    >
+                      {o.status}
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    {(() => {
+                      const isSeller =
+                        address &&
+                        o.seller?.toLowerCase() === address.toLowerCase();
+                      const isBuyer =
+                        address &&
+                        o.buyer?.toLowerCase() === address.toLowerCase();
+
+                      // 🔴 OPEN
+                      if (o.status === "OPEN") {
+                        const isTakingThis = takingId === o.orderId;
+                        if (!isConnected) {
+                          return (
+                            <button
+                              className="btn py-1 px-3 text-xs"
+                              onClick={() =>
+                                toast.error("Connect wallet first")
+                              }
+                            >
+                              Connect
+                            </button>
+                          );
+                        }
+
+                        if (isSeller) {
+                          return (
+                            <button
+                              disabled
+                              className="
+    inline-flex items-center justify-center
+    rounded-xl px-4 py-1.5 text-xs font-medium
+    bg-white/5 border border-white/10
+    text-white/40
+    cursor-not-allowed
+  "
+                            >
+                              Your Order
+                            </button>
+                          );
+                        }
+
                         return (
                           <button
-                            className="btn py-1 px-3 text-xs"
-                            onClick={() => toast.error("Connect wallet first")}
+                            disabled={isTakingThis}
+                            className={clsx(
+                              "inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold transition",
+                              isTakingThis
+                                ? "bg-emerald-500/40 text-black/70 cursor-not-allowed"
+                                : "bg-emerald-500/90 hover:bg-emerald-500 text-black cursor-pointer",
+                            )}
+                            onClick={() => onTakeOrder(o.orderId)}
                           >
-                            Connect
+                            {isTakingThis ? (
+                              <span className="inline-flex items-center gap-2">
+                                <Spinner />
+                                Taking…
+                              </span>
+                            ) : (
+                              "Take"
+                            )}
                           </button>
                         );
                       }
 
-                      if (isSeller) {
-                        return (
-                          <button
-                            className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                            disabled
-                          >
-                            Your Order
-                          </button>
-                        );
-                      }
-
-                      return (
-                        <button
-                          className="btn btn-primary py-1 px-3 text-xs"
-                          onClick={() => onTakeOrder(o.orderId)}
-                        >
-                          Take
-                        </button>
-                      );
-                    }
-
-                    // 🟡 TAKEN
-                    if (o.status === "TAKEN") {
-                      if (isSeller) {
-                        return (
-                          <button
-                            className="btn btn-primary py-1 px-3 text-xs"
-                            onClick={() => {
-                              setTxidOrderId(o.orderId);
-                              setTxidOpen(true);
-                            }}
-                          >
-                            Submit TXID
-                          </button>
-                        );
-                      }
-
-                      if (isBuyer) {
-                        return (
-                          <button
-                            className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                            disabled
-                          >
-                            Waiting Seller
-                          </button>
-                        );
-                      }
-
-                      return (
-                        <button
-                          className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                          disabled
-                        >
-                          Locked
-                        </button>
-                      );
-                    }
-
-                    // 🔵 DELIVERED
-                    if (o.status === "DELIVERED") {
-                      if (isBuyer) {
-                        return (
-                          <div>
+                      // 🟡 TAKEN
+                      if (o.status === "TAKEN") {
+                        if (isSeller) {
+                          return (
                             <button
                               className="btn btn-primary py-1 px-3 text-xs"
                               onClick={() => {
-                                setConfirmOrderId(o.orderId);
-                                setConfirmOpen(true);
+                                setTxidOrderId(o.orderId);
+                                setTxidOpen(true);
                               }}
                             >
-                              Confirm
+                              Submit TXID
                             </button>
+                          );
+                        }
+
+                        if (isBuyer) {
+                          return (
                             <button
-                              className="btn btn-danger py-1 px-3 ms-1 text-xs"
-                              onClick={() => {
-                                console.log("reject tx", o.orderId);
-                              }}
+                              className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                              disabled
                             >
-                              Reject
+                              Waiting Seller
                             </button>
-                          </div>
+                          );
+                        }
+
+                        return (
+                          <button
+                            className="inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs
+    bg-white/5 border border-white/10 text-white/50 cursor-not-allowed"
+                            disabled
+                          >
+                            Locked
+                          </button>
                         );
                       }
 
-                      if (isSeller) {
+                      // 🔵 DELIVERED
+                      if (o.status === "DELIVERED") {
+                        if (isBuyer) {
+                          return (
+                            <div>
+                              <button
+                                className="btn btn-primary py-1 px-3 text-xs"
+                                onClick={() => {
+                                  setConfirmOrderId(o.orderId);
+                                  setConfirmOpen(true);
+                                }}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                className="btn btn-danger py-1 px-3 ms-1 text-xs"
+                                onClick={() => {
+                                  console.log("reject tx", o.orderId);
+                                }}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        if (isSeller) {
+                          return (
+                            <button
+                              className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                              disabled
+                            >
+                              Waiting Confirmation
+                            </button>
+                          );
+                        }
+
                         return (
                           <button
                             className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
                             disabled
                           >
-                            Waiting Confirmation
+                            Delivered
                           </button>
                         );
                       }
 
-                      return (
-                        <button
-                          className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                          disabled
-                        >
-                          Delivered
-                        </button>
-                      );
-                    }
+                      // ⚫ FINISHED
+                      if (o.status === "FINISHED") {
+                        return (
+                          <button
+                            className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                            disabled
+                          >
+                            Completed
+                          </button>
+                        );
+                      }
 
-                    // ⚫ FINISHED
-                    if (o.status === "FINISHED") {
-                      return (
-                        <button
-                          className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
-                          disabled
-                        >
-                          Completed
-                        </button>
-                      );
-                    }
-
-                    return null;
-                  })()}
+                      return null;
+                    })()}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ✅ Pagination footer */}
-        <div className="mt-3 flex items-center justify-between">
-          <div className="text-xs muted">
-            Showing {orders.length} {orders.length === 1 ? "order" : "orders"}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              className={clsx(
-                "btn py-1 px-3 text-xs",
-                !nextCursor && "opacity-50 cursor-not-allowed",
-              )}
-              disabled={!nextCursor || loadingMore}
-              onClick={loadMore}
-            >
-              {loadingMore ? "Loading…" : nextCursor ? "Load more" : "No more"}
-            </button>
+              );
+            })}
           </div>
         </div>
       </div>
+      {/* ✅ Pagination footer */}
+      <div className="px-2 py-3 flex items-center justify-between">
+        <div className="text-xs text-white/50">
+          Showing{" "}
+          <span className="text-white/80 font-semibold">{orders.length}</span>{" "}
+          orders
+        </div>
+
+        <button
+          className={clsx(
+            "rounded-xl px-3 py-1.5 text-xs font-medium border transition",
+            nextCursor
+              ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-white"
+              : "bg-white/5 border-white/10 text-white/40 cursor-not-allowed",
+          )}
+          disabled={!nextCursor || loadingMore}
+          onClick={loadMore}
+        >
+          {loadingMore ? "Loading…" : nextCursor ? "Load more" : "No more"}
+        </button>
+      </div>
+
       <SubmitTxIdDialog
         open={txidOpen}
         orderId={txidOrderId}

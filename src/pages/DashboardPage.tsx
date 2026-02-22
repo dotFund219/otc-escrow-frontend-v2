@@ -4,6 +4,7 @@ import { useSiweAuth } from "../lib/useSiweAuth";
 import { useMe } from "../hooks/useMe";
 import { use, useEffect, useState } from "react";
 import { fetchOrderSumary } from "../lib/api/orders";
+import { ProfilePanel } from "../features/profile/ProfilePanel";
 
 type OrderSummary = {
   total: number;
@@ -95,31 +96,7 @@ export function DashboardPage() {
 
         <div className="flex flex-col gap-6">
           <WalletBalancePanel />
-          <div className="panel p-6">
-            <div className="text-lg font-semibold">Profile</div>
-            <div className="mt-4 grid gap-2 text-sm">
-              <div className="flex justify-between">
-                <span className="muted">Role</span>
-                <span>{me?.role || "TRADER"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="muted">KYC Status</span>
-                <span
-                  className={`pill border-emerald-400/30 ${me?.kycTier == "2" ? "bg-emerald-500/10 text-emerald-200" : "bg-red-500/10 text-red-200"}`}
-                >
-                  {me?.kycTier == "2" ? "APPROVED" : "NOT APPROVED"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="muted">Member Since</span>
-                <span>
-                  {me?.createdAt
-                    ? new Date(me.createdAt).toLocaleDateString()
-                    : "Unknown"}
-                </span>
-              </div>
-            </div>
-          </div>
+          <ProfilePanel me={me!} />
         </div>
       </div>
     </div>

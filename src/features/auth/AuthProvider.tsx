@@ -16,7 +16,7 @@ type AuthState = {
   loading: boolean;
   login: () => Promise<VerifyResponse>;
   logout: () => void;
-  // 필요하면: refresh/revalidate 같은 것도 여기에 추가 가능
+  // if needed: you can also add refresh/revalidate here
 };
 
 export const AuthContext = createContext<AuthState | null>(null);
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const chainId = useChainId();
   const { signMessageAsync } = useSignMessage();
 
-  // ✅ localStorage는 lazy init (렌더마다 getItem 평가되는 것 방지)
+  // ✅ localStorage is lazy init (prevents getItem from running on every render)
   const [token, setToken] = useState<string | null>(() =>
     localStorage.getItem("accessToken"),
   );
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("user");
   }, []);
 
-  // ✅ (선택) 다른 탭/창에서 로그인/로그아웃했을 때 동기화
+  // ✅ (optional) sync login/logout across other tabs/windows
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === "accessToken") {

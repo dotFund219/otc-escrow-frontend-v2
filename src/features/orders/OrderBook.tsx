@@ -18,6 +18,8 @@ import { submitDeliveryTx } from "../../lib/web3/submitDeliveryTx";
 import { ConfirmReceiptDialog } from "../../components/ui/dialog/ConfirmReceiptDialog";
 import { confirmReceipt } from "../../lib/web3/confirmReceipt";
 import { useSiweAuth } from "../auth/useSiweAuth";
+import { rejectReceipt } from "../../lib/web3/rejectReceipt";
+import { RejectReceiptDialog } from "../../components/ui/dialog/RejectReceiptDialog";
 
 function shortAddr(a?: string | null, left = 6, right = 4) {
   if (!a) return "-";
@@ -97,6 +99,10 @@ export function OrderBook({ compact }: { compact?: boolean }) {
   // ✅ compact(private orders) auth state
   const [authRequired, setAuthRequired] = useState(false);
   const authToastShownRef = useRef(false);
+
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   async function loadTokenMeta(list: OtcOrder[]) {
     try {
@@ -720,7 +726,8 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                                 <button
                                   className="btn btn-danger py-1 px-3 ms-1 text-xs"
                                   onClick={() => {
-                                    console.log("reject tx", o.orderId);
+                                    setRejectOrderId(o.orderId);
+                                    setRejectOpen(true);
                                   }}
                                 >
                                   Reject
@@ -902,6 +909,80 @@ export function OrderBook({ compact }: { compact?: boolean }) {
             });
           } finally {
             setConfirmingId(null);
+          }
+        }}
+      />
+      <RejectReceiptDialog
+        open={rejectOpen}
+        orderId={rejectOrderId}
+        tradeId={
+          orders.find((o) => o.orderId === rejectOrderId)?.tradeId ?? null
+        }
+        txid={orders.find((o) => o.orderId === rejectOrderId)?.txId ?? null}
+        rejecting={
+          rejectingId ===
+          orders.find((o) => o.orderId === rejectOrderId)?.orderId
+        }
+        onClose={() => {
+          if (rejectingId) return;
+          setRejectOpen(false);
+          setRejectOrderId(null);
+        }}
+        onReject={async () => {
+          const rejectOrder = orders.find((o) => o.orderId === rejectOrderId);
+
+          if (!isConnected || !address) {
+            toast.error("Please connect your wallet first.", {
+              title: "Wallet not connected",
+            });
+            return;
+          }
+          if (!rejectOrder) {
+            toast.error("Order not found", { title: "Error" });
+            return;
+          }
+          if (!rejectOrder.tradeId) {
+            toast.error("tradeId is missing", { title: "Error" });
+            return;
+          }
+          if (
+            !rejectOrder.buyer ||
+            rejectOrder.buyer.toLowerCase() !== address.toLowerCase()
+          ) {
+            toast.error("Only buyer can reject receipt.", {
+              title: "Not allowed",
+            });
+            return;
+          }
+          if (rejectOrder.status !== "DELIVERED") {
+            toast.error("You can reject only after seller submitted TXID.", {
+              title: "Invalid status",
+            });
+            return;
+          }
+
+          try {
+            setRejectingId(rejectOrder.orderId);
+
+            // ✅ on-chain call
+            const txHash = await rejectReceipt({
+              chainId: rejectOrder.chainId,
+              tradeId: rejectOrder.tradeId,
+            });
+
+            const ok = await checkTxHashIndexed(txHash);
+            if (ok) {
+              toast.success("Receipt rejected.", { title: "Submitted" });
+              setRejectOpen(false);
+              setRejectOrderId(null);
+              await loadFirstPage();
+            }
+          } catch (e: any) {
+            toast.error(`Failed to reject: ${e?.message ?? "Unknown error"}`, {
+              title: "Error",
+            });
+          } finally {
+            setRejectingId(null);
           }
         }}
       />

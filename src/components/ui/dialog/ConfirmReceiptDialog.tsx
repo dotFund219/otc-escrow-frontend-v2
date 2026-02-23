@@ -7,7 +7,7 @@ function shortTxid(txid: string, left = 10, right = 10) {
   return `${txid.slice(0, left)}…${txid.slice(-right)}`;
 }
 
-// ✅ 추가: Clipboard API + fallback
+// ✅ added: Clipboard API + fallback
 async function safeCopy(text: string) {
   const value = text.trim();
   if (!value) return false;
@@ -158,7 +158,7 @@ export function ConfirmReceiptDialog(props: {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1200);
                     } else {
-                      // 실패 시 UX: 버튼 텍스트 대신, 원하면 toast로 바꿔도 됨
+                      // on failure UX: you could swap button text for a toast if preferred
                       setCopied(false);
                       alert("Copy failed. Please copy manually.");
                     }

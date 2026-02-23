@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { AuthContext } from "./AuthProvider"; // 아래처럼 export 해줘야 함
+import { AuthContext } from "./AuthProvider"; // make sure to export it like this
 
 export function useSiweAuth() {
   const ctx = useContext(AuthContext);

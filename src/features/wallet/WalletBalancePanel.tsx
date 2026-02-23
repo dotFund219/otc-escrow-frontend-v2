@@ -170,7 +170,7 @@ export function WalletBalancePanel() {
 
             <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
               <span className="inline-flex items-center gap-2">
-                {/* Lucide Dot 대신 진짜 점 (정렬 더 안정적) */}
+                {/* use a real dot instead of Lucide Dot (more stable alignment) */}
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
                 Live
               </span>
@@ -183,7 +183,7 @@ export function WalletBalancePanel() {
           {isConnected && (
             <span
               className={cx(
-                // ✅ 버튼(h-9)과 동일 높이로 맞춤
+                // ✅ match height to button (h-9)
                 "inline-flex items-center h-9 px-3 rounded-xl border border-white/10 bg-white/5",
                 "text-xs text-zinc-200 tabular-nums",
               )}

@@ -91,6 +91,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const [takingId, setTakingId] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
   // ✅ compact(private orders) auth state
   const [authRequired, setAuthRequired] = useState(false);
@@ -327,13 +328,18 @@ export function OrderBook({ compact }: { compact?: boolean }) {
   };
 
   const onLogin = async () => {
+    if (signingIn) return;
+
     try {
+      setSigningIn(true);
       await login();
       toast.success("SIWE login successful", { title: "Signed in" });
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Failed to sign in.", {
         title: "Sign-in failed",
       });
+    } finally {
+      setSigningIn(false);
     }
   };
 
@@ -388,16 +394,33 @@ export function OrderBook({ compact }: { compact?: boolean }) {
               </div>
 
               <div className="mt-5 flex items-center justify-center gap-2">
-                <a
+                <button
+                  type="button"
+                  disabled={signingIn}
                   onClick={onLogin}
-                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-semibold
-                  bg-emerald-500/90 hover:bg-emerald-500 text-black transition cursor-default"
+                  className={clsx(
+                    "inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-semibold transition",
+                    signingIn
+                      ? "bg-emerald-500/40 text-black/70 cursor-not-allowed"
+                      : "bg-emerald-500/90 hover:bg-emerald-500 text-black cursor-pointer",
+                  )}
                 >
-                  Sign in / Create account
-                </a>
+                  {signingIn ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Spinner />
+                      Signing in…
+                    </span>
+                  ) : (
+                    "Sign in / Create account"
+                  )}
+                </button>
 
                 <button
-                  className="btn px-4 py-2 text-xs"
+                  className={clsx(
+                    "btn px-4 py-2 text-xs",
+                    signingIn && "opacity-60 cursor-not-allowed",
+                  )}
+                  disabled={signingIn}
                   onClick={() => {
                     setCountdown(REFRESH_SEC);
                     loadFirstPage();

@@ -1,6 +1,6 @@
 import { WalletBalancePanel } from "../features/wallet/WalletBalancePanel";
 import { OrderBook } from "../features/orders/OrderBook";
-import { useSiweAuth } from "../lib/useSiweAuth";
+import { useSiweAuth } from "../features/auth/useSiweAuth";
 import { useMe } from "../hooks/useMe";
 import { useEffect, useState } from "react";
 import { fetchOrderSumary } from "../lib/api/orders";
@@ -14,11 +14,12 @@ type OrderSummary = {
 
 export function DashboardPage() {
   const { token } = useSiweAuth();
-  const { me } = token ? useMe(token) : { me: null };
+  const { me, error } = useMe(token ? token : undefined);
   const [orderSummary, setOrderSummary] = useState<OrderSummary | null>(null);
 
   useEffect(() => {
     if (token) {
+      console.log("AAAAAAAAAAAA");
       Promise.resolve()
         .then(async () => {
           const sumary = await fetchOrderSumary(token);
@@ -96,7 +97,7 @@ export function DashboardPage() {
 
         <div className="flex flex-col gap-6">
           <WalletBalancePanel />
-          <ProfilePanel me={me!} />
+          <ProfilePanel me={error ? undefined : me!} />
         </div>
       </div>
     </div>

@@ -60,7 +60,7 @@ function isUnauthorized(e: any): boolean {
 
 export function OrderBook({ compact }: { compact?: boolean }) {
   const toast = useToast();
-  const { token } = useSiweAuth();
+  const { authed, token, login } = useSiweAuth();
 
   const REFRESH_SEC = 5;
   const [countdown, setCountdown] = useState(REFRESH_SEC);
@@ -233,7 +233,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
       if (t) window.clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chainId, hasLoadedMore, compact, token]);
+  }, [chainId, hasLoadedMore, compact, token, authed]);
 
   useEffect(() => {
     if (countdown !== REFRESH_SEC) return;
@@ -326,6 +326,17 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     CANCELLED: "bg-white/5 text-white/60 border-white/10",
   };
 
+  const onLogin = async () => {
+    try {
+      await login();
+      toast.success("SIWE login successful", { title: "Signed in" });
+    } catch (e: any) {
+      toast.error(e?.shortMessage || e?.message || "Failed to sign in.", {
+        title: "Sign-in failed",
+      });
+    }
+  };
+
   return (
     <div
       className={clsx("panel p-6", compact && "p-0 bg-transparent shadow-none")}
@@ -378,9 +389,9 @@ export function OrderBook({ compact }: { compact?: boolean }) {
 
               <div className="mt-5 flex items-center justify-center gap-2">
                 <a
-                  href="/auth"
+                  onClick={onLogin}
                   className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-semibold
-                  bg-emerald-500/90 hover:bg-emerald-500 text-black transition"
+                  bg-emerald-500/90 hover:bg-emerald-500 text-black transition cursor-default"
                 >
                   Sign in / Create account
                 </a>

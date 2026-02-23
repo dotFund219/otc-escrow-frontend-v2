@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "../wagmi/config";
 import { ToastProvider } from "../components/ui/toast/ToastProvider";
+import { AuthProvider } from "../features/auth/AuthProvider";
 
 const qc = new QueryClient();
 
@@ -12,7 +13,9 @@ export function Providers({ children }: PropsWithChildren) {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
         <BrowserRouter>
-          <ToastProvider>{children}</ToastProvider>
+          <AuthProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>
     </WagmiProvider>

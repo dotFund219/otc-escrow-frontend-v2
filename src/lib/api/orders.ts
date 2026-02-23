@@ -62,6 +62,7 @@ export async function fetchOrders(
     headers: {
       Authorization: `Bearer ${jwt}`,
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
     },
   });
 
@@ -89,7 +90,13 @@ export async function fetchPublicOrderBook(params?: {
 
   const url = `${API_BASE}/orders/public${qs.toString() ? `?${qs}` : ""}`;
 
-  const res = await fetch(url, { method: "GET" });
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom/non-standard",
+    },
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`GET /orders/public failed ${res.status}: ${t}`);
@@ -105,6 +112,8 @@ export async function fetchOrderSumary(jwt: string) {
     headers: {
       Authorization: `Bearer ${jwt}`,
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom/non-standard",
     },
   });
 

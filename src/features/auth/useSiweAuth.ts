@@ -25,7 +25,6 @@ export function useSiweAuth() {
     try {
       const { nonce } = await getNonce(address);
 
-      console.log(window.location.host);
       const msg = new SiweMessage({
         domain: window.location.host,
         address,

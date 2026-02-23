@@ -9,7 +9,13 @@ export async function getNonce(address: string) {
   const url = new URL(`${API_BASE}/auth/siwe/nonce`);
   url.searchParams.set("address", address);
 
-  const res = await fetch(url.toString(), { credentials: "include" });
+  const res = await fetch(url.toString(), {
+    credentials: "include",
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom/non-standard",
+    },
+  });
   if (!res.ok) throw new Error("Failed to get nonce");
   return res.json() as Promise<{ nonce: string; expiresAt: string }>;
 }
@@ -17,7 +23,11 @@ export async function getNonce(address: string) {
 export async function verifySiwe(message: string, signature: `0x${string}`) {
   const res = await fetch(`${API_BASE}/auth/siwe/verify`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom/non-standard",
+    },
     credentials: "include",
     body: JSON.stringify({ message, signature }),
   });

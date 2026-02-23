@@ -17,6 +17,8 @@ export async function fetchMe(token: string): Promise<MeResponse> {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom/non-standard",
     },
   });
 

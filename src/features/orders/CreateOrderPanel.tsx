@@ -10,6 +10,9 @@ import { useToast } from "../../components/ui/toast/ToastProvider";
 import { ABI, ADDR, ERC20_ABI } from "../../lib/contract";
 import AssetSelect from "../../components/ui/select/AssetSelect";
 import { useBinanceTickers } from "../../hooks/useBinanceTickers";
+import { Loader2 } from "lucide-react";
+import { cx } from "../../lib/uifunctions";
+import { checkTxHashIndexed } from "../../lib/api/orders";
 
 type TokenKey = "WBTC" | "WETH" | "USDT" | "USDC";
 
@@ -52,6 +55,8 @@ export function CreateOrderPanel() {
   const publicClient = usePublicClient({ chainId });
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
+
+  const [creating, setCreating] = useState(false);
 
   // Sell-only: the user always sells `sellToken` for `quoteToken`.
   const [sellKey, setSellKey] = useState<TokenKey>("WETH");
@@ -163,6 +168,8 @@ export function CreateOrderPanel() {
   const pairInvalid = sellKey === quoteKey;
 
   const onCreate = async () => {
+    if (creating) return;
+
     if (!isConnected || !address) {
       toast.error("Please connect your wallet first.", {
         title: "Wallet not connected",
@@ -198,6 +205,8 @@ export function CreateOrderPanel() {
       toast.error("Enter a valid quantity.", { title: "Invalid amount" });
       return;
     }
+
+    setCreating(true);
 
     try {
       // Step 1: approve sell token for Orders contract if needed
@@ -248,18 +257,24 @@ export function CreateOrderPanel() {
         }
       }
 
-      toast.success(
-        createdId ? `Order #${createdId} created` : "Order created",
-        {
-          title: "Success",
-        },
-      );
+      // Check if the txHash is added to backend (i.e. order is indexed) before showing success (optional, but improves UX)
+      const res = await checkTxHashIndexed(orderHash);
+      if (res == true) {
+        toast.success(
+          createdId ? `Order #${createdId} created` : "Order created",
+          {
+            title: "Success",
+          },
+        );
 
-      setQty("");
+        setQty("");
+      }
     } catch (e: any) {
       toast.error(e?.shortMessage || e?.message || "Transaction failed", {
         title: "Error",
       });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -351,18 +366,30 @@ export function CreateOrderPanel() {
         </div>
 
         <button
-          className="btn w-full bg-emerald-500/20 hover:bg-emerald-500/25 border-emerald-400/20 text-emerald-200"
+          className={cx(
+            "btn w-full border-emerald-400/20 text-emerald-200 transition flex items-center justify-center gap-2",
+            creating
+              ? "bg-emerald-500/30 cursor-not-allowed"
+              : "bg-emerald-500/20 hover:bg-emerald-500/25",
+          )}
           onClick={onCreate}
-          disabled={sellDecimalsLoading || pairInvalid}
+          disabled={sellDecimalsLoading || pairInvalid || creating}
           title={
             pairInvalid ? "Sell and quote tokens must be different" : undefined
           }
         >
-          {sellDecimalsLoading
-            ? "Loading decimals…"
-            : needsApprove
-              ? "Approve & Order"
-              : "Order"}
+          {creating ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              {needsApprove ? "Approving…" : "Creating…"}
+            </>
+          ) : sellDecimalsLoading ? (
+            "Loading decimals…"
+          ) : needsApprove ? (
+            "Approve & Order"
+          ) : (
+            "Order"
+          )}
         </button>
       </div>
     </div>

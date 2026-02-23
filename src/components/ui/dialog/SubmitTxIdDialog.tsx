@@ -46,7 +46,7 @@ export function SubmitTxIdDialog(props: {
     <div className="fixed inset-0 z-50">
       {/* backdrop */}
       <div
-        className="absolute inset-0 bg-black/55"
+        className="absolute inset-0 bg-black/85"
         onClick={() => !submitting && onClose()}
       />
 

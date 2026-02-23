@@ -9,6 +9,7 @@ import {
   useReadContracts,
 } from "wagmi";
 import { Wallet, RefreshCcw, Dot } from "lucide-react";
+import { cx } from "../../lib/uifunctions";
 
 const ERC20_ABI = [
   {
@@ -58,10 +59,6 @@ const TOKENS = [
     fixed: 6,
   },
 ] as const;
-
-function cx(...a: Array<string | false | null | undefined>) {
-  return a.filter(Boolean).join(" ");
-}
 
 function shortAddr(addr?: string) {
   if (!addr) return "0x... (address)";

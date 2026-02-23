@@ -124,3 +124,22 @@ export async function fetchOrderSumary(jwt: string) {
 
   return res.json();
 }
+
+export async function checkTxHashIndexed(txHash: string): Promise<boolean> {
+  const url = `${API_BASE}/orders/tx/${txHash}?waitMs=10000`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom/non-standard",
+    },
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(
+      `GET /orders/tx/${txHash}/waitMs=10000 failed ${res.status}: ${t}`,
+    );
+  }
+  return true;
+}

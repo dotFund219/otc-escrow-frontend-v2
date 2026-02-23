@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import {
+  checkTxHashIndexed,
   fetchOrders,
   fetchPublicOrderBook,
   type OrderStatus,
@@ -289,7 +290,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     try {
       setTakingId(orderId);
 
-      await approveAndTakeOrder({
+      const { takeTxHash } = await approveAndTakeOrder({
         orderId,
         chainId,
         contract: ADDR.contracts.orders,
@@ -297,8 +298,11 @@ export function OrderBook({ compact }: { compact?: boolean }) {
         quoteAmount: order.quoteAmount ?? "0",
       });
 
-      toast.success("Order taken successfully", { title: "Success" });
-      await loadFirstPage();
+      const res = await checkTxHashIndexed(takeTxHash);
+      if (res) {
+        toast.success("Order taken successfully", { title: "Success" });
+        await loadFirstPage();
+      }
     } catch (e: any) {
       toast.error("Failed to take order: " + (e?.message ?? "Unknown error"), {
         title: "Error",
@@ -809,14 +813,17 @@ export function OrderBook({ compact }: { compact?: boolean }) {
           }
 
           try {
-            await submitDeliveryTx({
+            const txHash = await submitDeliveryTx({
               chainId: order.chainId,
               tradeId: order.tradeId,
               txid,
             });
 
-            toast.success("TXID submitted on-chain", { title: "Success" });
-            await loadFirstPage();
+            const res = await checkTxHashIndexed(txHash);
+            if (res) {
+              toast.success("TXID submitted on-chain", { title: "Success" });
+              await loadFirstPage();
+            }
           } catch (e: any) {
             toast.error(e.message || "Submit failed", { title: "Error" });
           }
@@ -875,17 +882,20 @@ export function OrderBook({ compact }: { compact?: boolean }) {
           try {
             setConfirmingId(confirmOrder.orderId);
 
-            await confirmReceipt({
+            const txHash = await confirmReceipt({
               chainId: confirmOrder.chainId,
               tradeId: confirmOrder.tradeId,
             });
 
-            toast.success("Receipt confirmed. Trade finished.", {
-              title: "Success",
-            });
-            setConfirmOpen(false);
-            setConfirmOrderId(null);
-            await loadFirstPage();
+            const res = await checkTxHashIndexed(txHash);
+            if (res) {
+              toast.success("Receipt confirmed. Trade finished.", {
+                title: "Success",
+              });
+              setConfirmOpen(false);
+              setConfirmOrderId(null);
+              await loadFirstPage();
+            }
           } catch (e: any) {
             toast.error(`Failed to confirm: ${e?.message ?? "Unknown error"}`, {
               title: "Error",

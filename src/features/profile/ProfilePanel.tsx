@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Upload } from "lucide-react";
+import { cx } from "../../lib/uifunctions";
 
 type Me = {
   role?: string;
@@ -14,10 +15,6 @@ function fmtDate(d?: string) {
   } catch {
     return "Unknown";
   }
-}
-
-function cx(...a: Array<string | false | null | undefined>) {
-  return a.filter(Boolean).join(" ");
 }
 
 export function ProfilePanel({ me }: { me?: Me }) {

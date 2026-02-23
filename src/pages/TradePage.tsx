@@ -12,10 +12,7 @@ import {
   TimeframeOptions,
   type ItvRange,
 } from "../components/ui/button/TimeframeOptions";
-
-function cx(...a: Array<string | false | null | undefined>) {
-  return a.filter(Boolean).join(" ");
-}
+import { cx } from "../lib/uifunctions";
 
 export function TradePage() {
   const [market, setMarket] = useState<Market>(markets[0]);

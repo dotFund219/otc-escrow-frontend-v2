@@ -7,6 +7,44 @@ function shortTxid(txid: string, left = 10, right = 10) {
   return `${txid.slice(0, left)}…${txid.slice(-right)}`;
 }
 
+// ✅ 추가: Clipboard API + fallback
+async function safeCopy(text: string) {
+  const value = text.trim();
+  if (!value) return false;
+
+  // 1) Modern Clipboard API (works on https / localhost)
+  try {
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // ignore and fallback
+  }
+
+  // 2) Fallback: hidden textarea + execCommand
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.left = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function ConfirmReceiptDialog(props: {
   open: boolean;
   orderId: string | null;
@@ -71,7 +109,6 @@ export function ConfirmReceiptDialog(props: {
               title="Close"
               aria-label="Close"
             >
-              {/* X icon */}
               <svg
                 width="16"
                 height="16"
@@ -110,11 +147,21 @@ export function ConfirmReceiptDialog(props: {
                     missing && "opacity-50 cursor-not-allowed",
                   )}
                   disabled={missing}
-                  onClick={async () => {
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
                     if (!txid?.trim()) return;
-                    await navigator.clipboard.writeText(txid.trim());
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1200);
+
+                    const ok = await safeCopy(txid);
+                    if (ok) {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1200);
+                    } else {
+                      // 실패 시 UX: 버튼 텍스트 대신, 원하면 toast로 바꿔도 됨
+                      setCopied(false);
+                      alert("Copy failed. Please copy manually.");
+                    }
                   }}
                 >
                   {copied ? "Copied" : "Copy"}

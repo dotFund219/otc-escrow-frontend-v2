@@ -104,6 +104,15 @@ export function OrderBook({ compact }: { compact?: boolean }) {
   const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
+  type OrderStatusFilter = "ALL" | OrderStatus;
+
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>("ALL");
+
+  const visibleOrders = orders.filter((o) => {
+    if (statusFilter === "ALL") return true;
+    return o.status === statusFilter;
+  });
+
   async function loadTokenMeta(list: OtcOrder[]) {
     try {
       const uniq = new Set<string>();
@@ -333,6 +342,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
     OPEN: "bg-emerald-500/10 text-emerald-200 border-emerald-400/15",
     TAKEN: "bg-amber-500/10 text-amber-200 border-amber-400/15",
     DELIVERED: "bg-sky-500/10 text-sky-200 border-sky-400/15",
+    REJECTED: "bg-rose-500/10 text-rose-200 border-rose-400/15",
     FINISHED: "bg-violet-500/10 text-violet-200 border-violet-400/15",
     CANCELLED: "bg-white/5 text-white/60 border-white/10",
   };
@@ -377,6 +387,59 @@ export function OrderBook({ compact }: { compact?: boolean }) {
               Refresh in{" "}
               <span className="font-semibold text-zinc-100">{countdown}s</span>
             </div>
+            <IconRefreshButton
+              loading={loading}
+              onClick={() => {
+                setCountdown(REFRESH_SEC);
+                loadFirstPage();
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {compact && (
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold">Order Book</div>
+            <div className="mt-1 text-xs text-white/50">
+              Live • {visibleOrders.length} orders
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* ✅ Status filter */}
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+              {(
+                [
+                  "ALL",
+                  "OPEN",
+                  "TAKEN",
+                  "DELIVERED",
+                  "REJECTED",
+                  "FINISHED",
+                  "CANCELLED",
+                ] as const
+              ).map((s) => {
+                const active = statusFilter === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatusFilter(s as any)}
+                    className={clsx(
+                      "px-2.5 py-1 text-[11px] font-semibold rounded-lg transition whitespace-nowrap",
+                      active
+                        ? "bg-white/15 text-white border border-white/15"
+                        : "text-white/60 hover:text-white hover:bg-white/10",
+                    )}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+
             <IconRefreshButton
               loading={loading}
               onClick={() => {
@@ -446,7 +509,9 @@ export function OrderBook({ compact }: { compact?: boolean }) {
         {/* ✅ Normal orderbook table */}
         {!(compact !== undefined && authRequired) && (
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 overflow-hidden">
-            <div className="max-h-[520px] overflow-auto">
+            <div
+              className={`overflow-auto ${compact ? "max-h-[1080px]" : "max-h-[280px]"}`}
+            >
               {/* ✅ Sticky header */}
               <div
                 className="sticky top-0 z-10 grid grid-cols-7
@@ -469,17 +534,19 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                 </div>
               )}
 
-              {!err && orders.length === 0 && (
+              {!err && visibleOrders.length === 0 && (
                 <div className="border-t border-white/10">
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <div className="text-4xl opacity-40 mb-3">📭</div>
 
                     <div className="text-sm font-medium text-zinc-300">
-                      No open orders
+                      No orders
                     </div>
 
                     <div className="text-xs text-zinc-500 mt-1">
-                      There are currently no active orders for this pair.
+                      {statusFilter === "ALL"
+                        ? "There are currently no active orders for this pair."
+                        : `No orders with status ${statusFilter}.`}
                     </div>
 
                     <button
@@ -492,7 +559,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                 </div>
               )}
 
-              {orders.map((o) => {
+              {visibleOrders.map((o) => {
                 const sellAddr = o.sellToken.toLowerCase();
                 const quoteAddr = o.quoteToken.toLowerCase();
 
@@ -530,7 +597,7 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                   SELL: "bg-red-500/10 border-red-400/20 text-red-300",
                   BUY: "bg-emerald-500/10 border-emerald-400/20 text-emerald-300",
                   UNKNOWN: "bg-white/5 border-white/10 text-white/50",
-                  "NOT TAKEN": "bg-white/5 border-white/10 text-white/50",
+                  "NOT TAKEN": "bg-cyan-500/5 border-cyan-400/20 text-cyan-300",
                 };
 
                 const role =
@@ -765,6 +832,18 @@ export function OrderBook({ compact }: { compact?: boolean }) {
                               disabled
                             >
                               Completed
+                            </button>
+                          );
+                        }
+
+                        // 🔴 REJECTED
+                        if (o.status === "REJECTED") {
+                          return (
+                            <button
+                              className="btn py-1 px-3 text-xs opacity-50 cursor-not-allowed"
+                              disabled
+                            >
+                              Rejected
                             </button>
                           );
                         }

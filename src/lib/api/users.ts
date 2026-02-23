@@ -4,6 +4,10 @@ export type MeResponse = {
   role?: string;
   kycTier?: string;
   createdAt: string;
+  kyc?: {
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    url: string | null;
+  };
 };
 
 function getBaseUrl() {

@@ -1,12 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { cx } from "../../lib/uifunctions";
-
-type Me = {
-  role?: string;
-  kycTier?: string; // "2" approved
-  createdAt?: string;
-};
+import { uploadKycImage } from "../../lib/api/kyc";
+import { useSiweAuth } from "../auth/useSiweAuth";
+import type { MeResponse } from "../../lib/api/users";
 
 function fmtDate(d?: string) {
   if (!d) return "Unknown";
@@ -17,10 +14,38 @@ function fmtDate(d?: string) {
   }
 }
 
-export function ProfilePanel({ me }: { me?: Me }) {
+export function ProfilePanel({ me }: { me?: MeResponse }) {
   const [kycOpen, setKycOpen] = useState(false);
 
   const approved = me?.kycTier === "2";
+
+  const KYC_STYLE: Record<
+    "NOT_APPROVED" | "PENDING" | "APPROVED" | "REJECTED",
+    string
+  > = {
+    NOT_APPROVED: "border-zinc-400/20 bg-zinc-500/10 text-zinc-300",
+    PENDING: "border-amber-400/30 bg-amber-500/10 text-amber-200",
+    APPROVED: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
+    REJECTED: "border-red-400/30 bg-red-500/10 text-red-200",
+  };
+
+  const KYC_DOT: Record<
+    "NOT_APPROVED" | "PENDING" | "APPROVED" | "REJECTED",
+    string
+  > = {
+    NOT_APPROVED: "bg-zinc-400/70",
+    PENDING: "bg-amber-400/80",
+    APPROVED: "bg-emerald-400/80",
+    REJECTED: "bg-red-400/80",
+  };
+
+  const rawStatus = me?.kyc?.status as
+    | "PENDING"
+    | "APPROVED"
+    | "REJECTED"
+    | undefined;
+
+  const kycStatus = rawStatus ?? "NOT_APPROVED";
 
   return (
     <>
@@ -80,18 +105,16 @@ export function ProfilePanel({ me }: { me?: Me }) {
                   <span
                     className={cx(
                       "inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-semibold border",
-                      approved
-                        ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                        : "border-red-400/30 bg-red-500/10 text-red-200",
+                      KYC_STYLE[kycStatus],
                     )}
                   >
                     <span
                       className={cx(
                         "h-1.5 w-1.5 rounded-full",
-                        approved ? "bg-emerald-400/80" : "bg-red-400/80",
+                        KYC_DOT[kycStatus],
                       )}
                     />
-                    {approved ? "APPROVED (Tier 2)" : "NOT APPROVED"}
+                    {kycStatus === "NOT_APPROVED" ? "NOT APPROVED" : kycStatus}
                   </span>
                 }
               />
@@ -133,6 +156,7 @@ function KycUploadDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { token } = useSiweAuth();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -160,19 +184,11 @@ function KycUploadDialog({
     setBusy(true);
 
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-
-      // TODO: change endpoint + headers (auth) to match your backend
-      const resp = await fetch("/api/kyc/upload", {
-        method: "POST",
-        body: fd,
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => "");
-        throw new Error(text || `Upload failed (${resp.status})`);
-      }
+      // token isn't available on ProfilePanel,
+      // your project provides token via useSiweAuth, so
+      // either pass token into ProfilePanel as a prop,
+      // or let the dialog call useSiweAuth directly.
+      await uploadKycImage({ file, token: token ?? null });
 
       onClose();
       setFile(null);

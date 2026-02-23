@@ -21,7 +21,6 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (token) {
-      console.log("AAAAAAAAAAAA");
       Promise.resolve()
         .then(async () => {
           const sumary = await fetchOrderSumary(token);
@@ -180,60 +179,11 @@ export function DashboardPage() {
 
               <div className="flex items-center gap-2">
                 <button
-                  className="
-              inline-flex items-center justify-center
-              rounded-xl px-4 py-2 text-xs font-semibold
-              bg-white/5 hover:bg-white/10 border border-white/10
-              text-white transition
-            "
-                  onClick={() => {
-                    // optional: open filter modal later
-                  }}
-                >
-                  Filters
-                </button>
-
-                <button
                   className="btn btn-primary px-4 py-2 text-xs"
                   onClick={() => navigate("/trade")}
                 >
                   + New Order
                 </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Exchange Toolbar Row (search / sort vibe) */}
-          <div className="px-6 py-3 border-b border-white/10 bg-black/20">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="pill text-xs bg-white/5">
-                  View:{" "}
-                  <span className="font-semibold text-white/80">Private</span>
-                </div>
-                <div className="pill text-xs bg-white/5">
-                  Status:{" "}
-                  <span className="font-semibold text-white/80">All</span>
-                </div>
-                <div className="pill text-xs bg-white/5">
-                  Sort:{" "}
-                  <span className="font-semibold text-white/80">Recent</span>
-                </div>
-              </div>
-
-              {/* Fake search bar (optional to wire later) */}
-              <div className="w-full sm:w-[280px]">
-                <div
-                  className="
-              flex items-center gap-2
-              rounded-xl px-3 py-2
-              bg-black/30 border border-white/10
-              text-xs text-white/70
-            "
-                >
-                  <span className="opacity-60">🔎</span>
-                  <span className="opacity-60">Search order id / token…</span>
-                </div>
               </div>
             </div>
           </div>

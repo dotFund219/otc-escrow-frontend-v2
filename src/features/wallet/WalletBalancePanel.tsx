@@ -80,9 +80,18 @@ function SkeletonLine({ w = "w-24" }: { w?: string }) {
 
 export function WalletBalancePanel() {
   const { address, isConnected } = useAccount();
-  const { data: blockNumber } = useBlockNumber({ watch: true });
+  const {
+    data: blockNumber,
+    refetch: refetchBlock,
+    isFetching: blockFetching,
+  } = useBlockNumber({ watch: true });
 
-  const { data: ethBal, isLoading: ethLoading } = useBalance({
+  const {
+    data: ethBal,
+    isLoading: ethLoading,
+    refetch: refetchEth,
+    isFetching: ethFetching,
+  } = useBalance({
     address,
     query: { enabled: !!address, refetchInterval: 10_000 },
   });
@@ -97,7 +106,12 @@ export function WalletBalancePanel() {
     }));
   }, [address]);
 
-  const { data: erc20Res, isLoading: erc20Loading } = useReadContracts({
+  const {
+    data: erc20Res,
+    isLoading: erc20Loading,
+    refetch: refetchErc20,
+    isFetching: erc20Fetching,
+  } = useReadContracts({
     contracts,
     query: { enabled: !!address, refetchInterval: 10_000 },
   });
@@ -136,7 +150,8 @@ export function WalletBalancePanel() {
     return rows;
   }, [ethBal, ethLoading, erc20Res, erc20Loading]);
 
-  const anyLoading = ethLoading || erc20Loading;
+  const anyLoading =
+    ethLoading || erc20Loading || ethFetching || erc20Fetching || blockFetching;
 
   return (
     <div className="panel p-6 relative overflow-hidden">
@@ -145,39 +160,60 @@ export function WalletBalancePanel() {
       <div className="pointer-events-none absolute -bottom-28 -left-28 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center shrink-0">
             <Wallet size={18} className="text-zinc-200" />
           </div>
-          <div>
-            <div className="text-sm font-semibold tracking-tight">
+
+          <div className="min-w-0">
+            <div className="text-sm font-semibold tracking-tight truncate">
               Wallet Balance
             </div>
+
             <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
-              <span className="inline-flex items-center gap-1">
-                <Dot className="text-emerald-400" size={18} />
+              <span className="inline-flex items-center gap-2">
+                {/* Lucide Dot 대신 진짜 점 (정렬 더 안정적) */}
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
                 Live
-              </span>
-              <span className="text-zinc-600">•</span>
-              <span>
-                {blockNumber ? `Block ${blockNumber.toString()}` : "Block —"}
               </span>
             </div>
           </div>
         </div>
 
         {/* Right controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {isConnected && (
-            <span className="pill text-xs">{shortAddr(address)}</span>
+            <span
+              className={cx(
+                // ✅ 버튼(h-9)과 동일 높이로 맞춤
+                "inline-flex items-center h-9 px-3 rounded-xl border border-white/10 bg-white/5",
+                "text-xs text-zinc-200 tabular-nums",
+              )}
+              title={address ?? ""}
+            >
+              {shortAddr(address)}
+            </span>
           )}
+
           <button
-            className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition flex items-center justify-center"
-            title="Auto refresh every 10s"
-            onClick={() => {
-              // wagmi is already polling; this is just a UX button (no-op)
-              // You can wire this to queryClient.invalidateQueries if you use TanStack Query.
+            disabled={!address || anyLoading}
+            className={cx(
+              "h-9 w-9 rounded-xl border border-white/10 bg-white/5 transition flex items-center justify-center",
+              !address || anyLoading
+                ? "opacity-60 cursor-not-allowed"
+                : "hover:bg-white/10",
+            )}
+            title="Refresh now"
+            onClick={async () => {
+              if (!address) return;
+              try {
+                await Promise.all([
+                  refetchEth(),
+                  refetchErc20(),
+                  refetchBlock?.(),
+                ]);
+              } catch {}
             }}
           >
             <RefreshCcw
@@ -197,13 +233,31 @@ export function WalletBalancePanel() {
           {/* Summary strip */}
           <div className="mt-5">
             <div className="panel-inset p-4">
-              <div className="text-xs text-zinc-400">Assets</div>
-              <div className="mt-1 text-lg font-semibold">
-                {anyLoading ? "Updating…" : `${walletBalances.length} tokens`}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-zinc-400">Assets</div>
+                  <div className="mt-1 text-lg font-semibold">
+                    {anyLoading
+                      ? "Updating…"
+                      : `${walletBalances.length} tokens`}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <span className="pill text-[10px] bg-white/5">
+                    {blockNumber
+                      ? `Block ${blockNumber.toString()}`
+                      : "Block —"}
+                  </span>
+                  <span className="text-[10px] text-zinc-500">
+                    Auto refresh 10s
+                  </span>
+                </div>
               </div>
-              <div className="mt-2 text-xs text-zinc-500">
+
+              {/* <div className="mt-3 text-xs text-zinc-500">
                 Balances refresh every 10 seconds.
-              </div>
+              </div> */}
             </div>
           </div>
 

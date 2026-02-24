@@ -11,8 +11,8 @@ import { AdminConfigPanel } from "./config/AdminConfigPanel";
 const tabs = [
   { key: "users", label: "Users" },
   { key: "orders", label: "Orders" },
-  { key: "events", label: "Events" },
-  { key: "sync", label: "Sync" },
+  // { key: "events", label: "Events" },
+  // { key: "sync", label: "Sync" },
   { key: "config", label: "Config" },
 ] as const;
 

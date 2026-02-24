@@ -8,7 +8,7 @@ import {
   useBlockNumber,
   useReadContracts,
 } from "wagmi";
-import { Wallet, RefreshCcw, Dot } from "lucide-react";
+import { Wallet, RefreshCcw } from "lucide-react";
 import { cx } from "../../lib/uifunctions";
 
 const ERC20_ABI = [
